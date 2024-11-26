@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Head Gesture Detection</title>
+  <script type="module" src="gesture.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+    .status {
+      font-size: 18px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Head Gesture Detection</h1>
+  <div>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="output"></canvas>
+  </div>
+  <div class="status">
+    <p><b>Yaw:</b> <span id="yaw">0</span>°</p>
+    <p><b>Pitch:</b> <span id="pitch">0</span>°</p>
+    <p><b>Shake:</b> <span id="shake-status">false</span></p>
+    <p><b>Nod:</b> <span id="nod-status">false</span></p>
+  </div>
+</body>
+</html>
