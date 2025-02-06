@@ -1,10 +1,9 @@
 import cv2
-from tools import clearTerminal, showPointsOfInterest
+from tools import clearTerminal, showPointsOfInterest, write2Csv
 from mediapipe_extract import extractFeatures, getMovementFromFeatures, featureNormalization
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-import csv
 
 # ~~~~~~ Setup params ~~~~~~~~~~~
 windowLenghtMs = 500
@@ -17,7 +16,7 @@ clearTerminal()
 cap = cv2.VideoCapture(inputFilePath)
 videoHeight = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 videoWidth = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-fps = cap.get(cv2.CAP_PROP_FPS)      
+fps = cap.get(cv2.CAP_PROP_FPS)
 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 # frame_count = 200
 duration = frame_count/fps
@@ -37,7 +36,7 @@ for frameNr in range(0, frame_count-1):
     print("Reading frame nr {} from total of {}".format(frameNr, frame_count-1), end='\r')
     if ret:
         allFeatures[frameNr, :, :] = extractFeatures(frame)
-        showPointsOfInterest(frame, allFeatures[frameNr, :, :], pointsOfInterest)
+        # showPointsOfInterest(frame, allFeatures[frameNr, :, :], pointsOfInterest)
 
 print('\nDone')
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -64,13 +63,8 @@ plt.plot(xPoints, movementDegreeEyebrows, label= 'Eyebrows movement', color='gre
 plt.xlabel('time (s)')
 plt.legend()
 plt.show()
-# Writing to CSV
-with open("movement_output.csv", "w", newline="") as file:
-    writer = csv.writer(file)
-    data = [xPoints.tolist(), movementDegreeNose.tolist(), movementDegreeMouth.tolist(), movementDegreeEyebrows.tolist()]
-    writer.writerows(data)
+write2Csv('movement_output.csv',[[inputFilePath], xPoints.tolist(), movementDegreeNose.tolist(), movementDegreeMouth.tolist(), movementDegreeEyebrows.tolist()])
 
-print("CSV file has been written successfully.")
 # ------------------------
 
 

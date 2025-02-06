@@ -1,5 +1,7 @@
 from os import system, name
 import cv2
+import csv
+
 def clearTerminal():
 
     # for windows
@@ -19,3 +21,10 @@ def showPointsOfInterest(frame, allFeatures, pointsOfInterest):
     cv2.imshow("Webcam Frame", frame) 
     # Wait for a key press
     cv2.waitKey(5)
+
+def write2Csv(fileName, data):
+    with open(fileName, "w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerows(data)
+
+    print("CSV file has been written successfully.")
