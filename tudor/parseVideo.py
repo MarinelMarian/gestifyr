@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 # ~~~~~~ Setup params ~~~~~~~~~~~
 windowLenghtMs = 500
 windowOverlapRatio = 0.5
-inputFilePath = './tudor/test_tudor.mov'
+inputFilePath = './tudor/gest1-4.mov'
+csvOutputFile = 'gest1-4.csv'
 clearTerminal()
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -63,7 +64,7 @@ plt.plot(xPoints, movementDegreeEyebrows, label= 'Eyebrows movement', color='gre
 plt.xlabel('time (s)')
 plt.legend()
 plt.show()
-write2Csv('movement_output.csv',[[inputFilePath], xPoints.tolist(), movementDegreeNose.tolist(), movementDegreeMouth.tolist(), movementDegreeEyebrows.tolist()])
+write2Csv(csvOutputFile,[[inputFilePath], xPoints.tolist(), movementDegreeNose.tolist(), movementDegreeMouth.tolist(), movementDegreeEyebrows.tolist()])
 
 # ------------------------
 
