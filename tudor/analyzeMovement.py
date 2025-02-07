@@ -50,11 +50,14 @@ def onKeyPress(event):
     if event.key == 'a':
         playVideoAndExtract(cap, latestStartCoordinate, latestStopCoordinate)
     if event.key in ['1','2','3','4','5','6','7','8','9']:
-        rawFeatures, processedFeatures = extractFeatures4gesture(cap, latestStartCoordinate, latestStopCoordinate)
+        rawFeatures, rawFeaturesNormalized, processedFeatures = extractFeatures4gesture(cap, latestStartCoordinate, latestStopCoordinate)
         fileNameraw = f'tudor/raw/gesture_{event.key}__{int(dt.datetime.now().timestamp())}.csv'
-        write2Csv(fileNameraw, [[event.key]] + rawFeatures)
-        fileNameraw = f'tudor/processed/gesture_{event.key}__{int(dt.datetime.now().timestamp())}.csv'
-        write2Csv(fileNameraw, [[event.key]] + processedFeatures)
+        firstRow = [[dict([('gestureId', event.key), ('fps', cap.get(cv2.CAP_PROP_FPS))])]]
+        write2Csv(fileNameraw, firstRow + rawFeatures)
+        fileNamerawNorm = f'tudor/raw_normalized/gesture_{event.key}__{int(dt.datetime.now().timestamp())}.csv'
+        write2Csv(fileNamerawNorm, firstRow + rawFeaturesNormalized)
+        fileNameProcessed = f'tudor/processed/gesture_{event.key}__{int(dt.datetime.now().timestamp())}.csv'
+        write2Csv(fileNameProcessed, firstRow + processedFeatures)
         print("Done saving")
          
          

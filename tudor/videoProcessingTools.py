@@ -35,6 +35,7 @@ def extractFeatures4gesture(cap, startSec, stopSec):
     start_frame = int(startSec *fps)  # Define start frame
     end_frame = int(stopSec *fps)    # Define end frame
     rawFeatures = []
+    rawFeaturesNormalized = []
     processedFeatures = []
     # Set the starting frame
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
@@ -46,10 +47,12 @@ def extractFeatures4gesture(cap, startSec, stopSec):
         if not ret:
             break  # Exit if video ends or there's an error
         result_features = extractFeaturesv2(frame)
-        rawArray = featureNormalization(np.array([[el.x, el.y, el.z] for el in result_features.face_landmarks[0]]))
+        rawArray = np.array([[el.x, el.y, el.z] for el in result_features.face_landmarks[0]])
+        rawArrayNormalized = featureNormalization(rawArray.copy())
         rawFeatures.append(list(rawArray.reshape(-1)))
+        rawFeaturesNormalized.append(list(rawArrayNormalized.reshape(-1)))
         processedFeatures.append([c.score for c in result_features.face_blendshapes[0]])
-    return (rawFeatures, processedFeatures)
+    return (rawFeatures, rawFeaturesNormalized, processedFeatures)
 
         
 
