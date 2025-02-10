@@ -27,4 +27,4 @@ def write2Csv(fileName, data):
         writer = csv.writer(file)
         writer.writerows(data)
 
-    print("CSV file has been written successfully.")
+    print(f"CSV file {fileName} has been written successfully.")
