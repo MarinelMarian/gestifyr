@@ -44,6 +44,7 @@ const canvasCtx = canvasElement.getContext("2d");
  * Solution options.
  */
 const solutionOptions = {
+    soundEnabled: true,
     selfieMode: true,
     enableFaceGeometry: false,
     maxNumFaces: 1,
@@ -83,6 +84,7 @@ let isMouthOpen = false;
 const bufferSize = 15; // Number of frames to store
 let windowSize = 2;
 let distance = 1;
+let isSoundEnabled = true; // Sound is enabled by default
 
 
 // Buffers for storing pitch and yaw history
@@ -109,9 +111,10 @@ function setupAudio({ fileName, gestureName }) {
 
 // Function to play audio if the specified gesture is detected
 function playAudioIfDetected(audioConfig, isGestureDetected) {
-    if (isGestureDetected && !isAudioPlaying) {
+    if (isGestureDetected && isSoundEnabled && !isAudioPlaying) {
         isAudioPlaying = true; // Set flag to prevent overlapping
         currentAudio = audioConfig.audio;
+
         currentAudio.play();
     }
 }
@@ -446,7 +449,7 @@ function onResults(results) {
         minYaw = Math.min(minYaw, yaw).toFixed(2); 
 
 
-        const textXPos = canvasElement.width-200*scaleX;
+        const textXPos = canvasElement.width-125*scaleX;
         const textRow = 20*scaleX; 
 
         canvasCtx.fillStyle = "black";
@@ -513,9 +516,10 @@ faceMesh.onResults(onResults);
 // options.
 new controls.ControlPanel(controlsElement, solutionOptions)
     .add([
-    new controls.StaticText({ title: "MediaPipe Face Mesh" }),
+    new controls.StaticText({ title: "Gestifyr" }),
     fpsControl,
     new controls.Toggle({ title: "Selfie Mode", field: "selfieMode" }),
+    new controls.Toggle({ title: "Sound", field: "soundEnabled" }),
     new controls.SourcePicker({
         onFrame: async (input, size) => {
             const aspect = size.height / size.width;
@@ -559,6 +563,8 @@ new controls.ControlPanel(controlsElement, solutionOptions)
     .on((x) => {
     const options = x;
     videoElement.classList.toggle("selfie", options.selfieMode);
+    !options.soundEnabled != !options.soundEnabled;
+    isSoundEnabled = options.soundEnabled;
     faceMesh.setOptions(options);
 });
 
