@@ -44,7 +44,7 @@ const canvasCtx = canvasElement.getContext("2d");
  * Solution options.
  */
 const solutionOptions = {
-    soundEnabled: true,
+    soundEnabled: false,
     selfieMode: true,
     enableFaceGeometry: false,
     maxNumFaces: 1,
@@ -563,7 +563,7 @@ new controls.ControlPanel(controlsElement, solutionOptions)
     .on((x) => {
     const options = x;
     videoElement.classList.toggle("selfie", options.selfieMode);
-    !options.soundEnabled != !options.soundEnabled;
+    videoElement.classList.toggle("sound", options.soundEnabled);
     isSoundEnabled = options.soundEnabled;
     faceMesh.setOptions(options);
 });
