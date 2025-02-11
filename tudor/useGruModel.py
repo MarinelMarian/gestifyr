@@ -8,17 +8,25 @@ import cv2
 from collections import deque
 from mediapipe_extract import extractFeaturesv2, extractFeatures, featureNormalization
 from tools import clearTerminal
+import json
+
 clearTerminal()
 
 # ----- init params --------
+queueFrameSize = 30
+
 # Model parameters
-input_size = 1434  # Feature size 478 points of x,y,z
-hidden_size = 128
-output_size = 5
-num_layers = 2
-savedModelFileName = "gru_model_raw_normalized_features.pth"
-savedScalerFileName = "scaler_raw_normalized_features.pkl"
+metadataFilename = "tudor/model/raw_normalized64_3/info_model.txt"
+with open(metadataFilename, "r") as file:
+    data = json.load(file)
+input_size = data['input_size']  # Feature size 478 points of x,y,z
+hidden_size = data['hidden_size']
+output_size = data['output_size']
+num_layers = data['num_layers']
+savedModelFileName = data['modelFile']
+savedScalerFileName = data['scalerFile']
 labels = ['da','nu ','gura casca','ridicat', 'nimic']
+print(f'Loaded inputSize={input_size}, hiddenSize={hidden_size}, outputSize={output_size}, numLayers={num_layers}, modelFile={savedModelFileName}')
 
 # -----------
 
@@ -50,7 +58,7 @@ print("Model loaded successfully!")
 
 
 cap = cv2.VideoCapture(0)  # Open the default webcam
-frameQueue = deque(maxlen=60)
+frameQueue = deque(maxlen=queueFrameSize)
 shouldExit = False
 if not cap.isOpened():
     print("Error: Could not open webcam.")
@@ -90,12 +98,12 @@ while not shouldExit:
                 # Get predicted class and confidence
             predicted_class = torch.argmax(probabilities, dim=1)
             confidence = torch.max(probabilities, dim=1).values
-            print(f'propabilities:{probabilities}')
+            # print(f'propabilities:{probabilities}')
 
             predicted_label = labels[predicted_class.item()]
 
-            if confidence.item() > 0.94:
-                print(f"Predicted Gesture: {predicted_label}, Confidence: {confidence.item():.4f}")
+            # if confidence.item() > 0.8:
+            print(f"Predicted Gesture: {predicted_label}, Confidence: {confidence.item():.4f}")
 
 
 

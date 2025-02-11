@@ -1,0 +1,15 @@
+{
+    "modelFile": "tudor/model/raw_normalized32_2/gru_model.pth",
+    "scalerFile": "tudor/model/raw_normalized32_2/scaler.pkl",
+    "hidden_size": 32,
+    "num_layers": 2,
+    "labels": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+    ],
+    "input_size": 1434,
+    "output_size": 5
+}

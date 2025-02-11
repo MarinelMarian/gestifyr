@@ -10,19 +10,23 @@ from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn.functional as F
 import joblib
+import json
+import os
 
 
 # --------- Init Params -------
-train_files = glob.glob("tudor/samples1/raw_normalized/*.csv")
+train_files = glob.glob("tudor/samples2/raw_normalized/*.csv")
 #Model params
-hidden_size = 128
-num_layers = 2
-epochs = 100
-saveModelFileName = "gru_model_raw_normalized_features.pth"
-saveScalerFileName = "scaler_raw_normalized_features.pkl"
+hidden_size = 64
+num_layers = 3
+epochs = 1000
+modelName = 'raw_normalized64_3'
+saveModelFileName = f"tudor/model/{modelName}/gru_model.pth"
+saveScalerFileName = f"tudor/model/{modelName}/scaler.pkl"
+modelMetadataFile = f"tudor/model/{modelName}/info_model.txt"
 
 # ---------------------
-
+os.makedirs(f'tudor/model/{modelName}', exist_ok=True)
 
 # Define GRU Model
 class GRUNet(nn.Module):
@@ -103,8 +107,22 @@ for epoch in range(epochs):
         optimizer.step()
         total_loss += loss.item()
     print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(train_loader):.4f}")
+    if total_loss/len(train_loader) < 0.01:
+        break
 torch.save(model.state_dict(), saveModelFileName)
 joblib.dump(scaler, saveScalerFileName)
+metadata = {
+    'modelFile': saveModelFileName,
+    'scalerFile': saveScalerFileName,
+    'hidden_size' : hidden_size,
+    "num_layers" : num_layers,
+    "labels": labels,
+    "input_size": input_size,
+    "output_size": output_size
+}
+with open(modelMetadataFile, "w") as file:
+    json.dump(metadata, file, indent=4)
+    print(f"MetaData saved successfully! to file {file}")
 print("Model saved successfully!")
 # # Evaluation
 # model.eval()
