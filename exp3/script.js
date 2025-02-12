@@ -74,7 +74,7 @@ const nodThreshold = 0.2; // Adjust for sensitivity
 const shakeThreshold = 0.4; // Adjust for sensitivity
 const rollThreshold = 0.5; // Adjust for sensitivity
 const mouthOpenThreshold = 0.03; // Adjust based on sensitivity
-const eyebrowRaiseThreshold = 0.05; // Threshold for eyebrow raise detection
+const eyebrowRaiseThreshold = 1.25; // Threshold for eyebrow raise detection
 const eyeOpenThreshold = 0.02; // Threshold for eye openness detection
 let isHeadNod = false;
 let isHeadShake = false;
@@ -266,33 +266,42 @@ function onResults(results) {
 
 
             // Calculate eyebrow-raise status
-            const rightEyebrowOuter = landmarks[70];
-            const rightEyebrowInner = landmarks[105];
+            const rightEyebrowOuter = landmarks[52];
             const rightEyeCenter = landmarks[159];
 
-            const leftEyebrowOuter = landmarks[336];
-            const leftEyebrowInner = landmarks[334];
+            const leftEyebrowOuter = landmarks[282];
             const leftEyeCenter = landmarks[386];
+            let leftEyeMiddle = {};
+            let rightEyeMiddle = {};
+            leftEyeMiddle.x =  (landmarks[33].x + landmarks[133].x) / 2;
+            leftEyeMiddle.y =  (landmarks[33].y + landmarks[133].y) / 2;
+            rightEyeMiddle.x =  (landmarks[362].x + landmarks[263].x) / 2;
+            rightEyeMiddle.y =  (landmarks[362].y + landmarks[263].y) / 2;
+            
+            const distanceBetweenEyes = Math.sqrt(
+               (leftEyeMiddle.x - rightEyeMiddle.x)**2 + (leftEyeMiddle.y - rightEyeMiddle.y)**2
+            );
+            const eyeBrowRightDistance = Math.sqrt(
+                (rightEyeMiddle.x - rightEyebrowOuter.x)**2 + (rightEyeMiddle.y - rightEyebrowOuter.y)**2
+            );
 
-            const isRightEyebrowRaised =
-                Math.min(rightEyebrowOuter.y, rightEyebrowInner.y) < rightEyeCenter.y - eyebrowRaiseThreshold;
-
-            const isLeftEyebrowRaised =
-                Math.min(leftEyebrowOuter.y, leftEyebrowInner.y) < leftEyeCenter.y - eyebrowRaiseThreshold;
+            const eyeBrowLeftDistance = Math.sqrt(
+                (leftEyeMiddle.x - leftEyebrowOuter.x)**2 + (leftEyeMiddle.y - leftEyebrowOuter.y)**2
+            );
+  
+            const isRightEyebrowRaised = (eyeBrowRightDistance / distanceBetweenEyes) > eyebrowRaiseThreshold;
+            const isLeftEyebrowRaised = (eyeBrowLeftDistance / distanceBetweenEyes) > eyebrowRaiseThreshold;
 
             // Calculate eye-open status
             const rightEyeOpenDistance = Math.abs(rightEyeCenter.y - landmarks[145].y);
             const leftEyeOpenDistance = Math.abs(leftEyeCenter.y - landmarks[374].y);            
 
-            const isRightEyeOpen = rightEyeOpenDistance > eyeOpenThreshold;
-            const isLeftEyeOpen = leftEyeOpenDistance > eyeOpenThreshold;
-
             // Combine checks for eyebrow raise and eye openness
-            areBothEyebrowsRaised = (isRightEyebrowRaised || isLeftEyebrowRaised) && isRightEyeOpen && isLeftEyeOpen;
-            actualValues["eyebrows"] = Math.max(
-                rightEyeCenter.y - Math.min(rightEyebrowOuter.y, rightEyebrowInner.y),
-                leftEyeCenter.y - Math.min(leftEyebrowOuter.y, leftEyebrowInner.y)
-            );
+            areBothEyebrowsRaised = (isRightEyebrowRaised || isLeftEyebrowRaised);
+            actualValues["eyebrows"] = (Math.max(
+                eyeBrowRightDistance / distanceBetweenEyes,
+                eyeBrowLeftDistance/ distanceBetweenEyes
+            ) - 1.1) * eyebrowRaiseThreshold/(eyebrowRaiseThreshold-1.1);
 
             playAudioIfDetected(imHappyConfig, areBothEyebrowsRaised);
 
