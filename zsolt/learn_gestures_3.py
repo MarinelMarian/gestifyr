@@ -6,13 +6,14 @@ import pandas as pd
 import numpy as np
 import re
 import os
+import random
 
 # Define datasets
 file_paths = []
 # Get all files in the current directory
 for file_name in os.listdir("."):
     # Check if the file name starts with 'gesture_' and ends with '.csv'
-    if file_name.startswith("gesture_") and file_name.endswith(".csv"):
+    if file_name.startswith("gesture_1") and file_name.endswith(".csv"):
         file_paths.append(file_name)
 
 file_paths.sort()
@@ -28,13 +29,14 @@ target = "Gesture"
 def create_sequences(data, seq_length, gesture):
     sequences = []
     targets = []
-    for i in range(len(data) - seq_length):
-        seq = data.iloc[i:i+seq_length].values
+    for i in range(len(data)):
+        seq = data.iloc[i].values
+        if len(seq) != seq_length:
+            i = i
         label = gesture;
         sequences.append(seq)
         targets.append(label)
     return np.array(sequences), np.array(targets)
-
 
 # Dataset and DataLoader
 class GestureDataset(Dataset):
@@ -57,14 +59,15 @@ class RNNModel(nn.Module):
 
     def forward(self, x):
         out, _ = self.rnn(x)
-        out = self.fc(out[:, -1, :])  # Take last output
+        out = self.fc(out[-1])  # Take last output
         return out.squeeze()
 
 # Model parameters
 input_size = sequence_length
-hidden_size = 32
+hidden_size = 52
 num_layers = 2
 model = RNNModel(input_size, hidden_size, num_layers)
+criterion = nn.MSELoss()
 
 def get_x_y_gesture(file_path):
     df = pd.read_csv(file_path, skiprows=1, header=None)
@@ -86,42 +89,47 @@ def get_x_y_gesture(file_path):
 
 def epoch_learn(epoch):
     # Load dataset
-    file_path = file_paths[epoch]
-    
-    X, y, gesture = get_x_y_gesture(file_path)
+    for file_path in file_paths:    
+        X, y, gesture = get_x_y_gesture(file_path)
 
-    dataset = GestureDataset(X, y)
-    dataloader = DataLoader(dataset, batch_size=16)
+        dataset = GestureDataset(X, y)
+        dataloader = DataLoader(dataset, batch_size=sequence_length)
 
-    # Loss and optimizer
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.0000000000000001)
+        # Loss and optimizer
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
-    for batch_X, batch_y in dataloader:
-        optimizer.zero_grad()
-        outputs = model(batch_X)
-        loss = criterion(outputs, batch_y)
-        loss.backward()
-        optimizer.step()
+        for batch_X, batch_y in dataloader:
+            optimizer.zero_grad()
+            outputs = model(batch_X)
+            loss = criterion(outputs, batch_y.mean())
+            loss.backward()
+            optimizer.step()
 
-    if "loss" in locals():
-        print(f"Epoch {epoch+1}/{epochs}, File {file_path}, Gesture {gesture}, Loss: {loss.item():.4f}")
+def predict(epoch):
+    # Prediction test using a random file from the dataset
+    if epoch % 10 == 0:
+        file_path = 'gesture_5__1739288434.csv'
     else:
-        print(f"Epoch {epoch+1}/{epochs}, File {file_path}, Gesture {gesture}, Loss: !!!UNDEFINED!!!")
+        file_path = random.choice(file_paths)
+
+    sample_input, sample_target, gesture = get_x_y_gesture(file_path)
+
+    model.eval()
+    with torch.no_grad():
+        predictions = model(sample_input)
+
+    diff = abs(gesture - predictions)
+    if diff < 0.05:
+        print(f"Epoch {epoch+1}/{epochs}, Predicted Gesture: {predictions}, Actual Gesture: {gesture}, Diff: {diff}, OK")
+    else:
+        print(f"Epoch {epoch+1}/{epochs}, Predicted Gesture: {predictions}, Actual Gesture: {gesture}, Diff: {diff}, !!!!!!!!")
+
 
 # Training loop
-epochs = len(file_paths)
+epochs = 1000
 for epoch in range(epochs):
     epoch_learn(epoch)
+    predict(epoch)
     
+print("Process complete.")
 
-print("Training complete.")
-
-
-# Prediction test using the 3rd row from the dataset
-sample_input, sample_target, gesture = get_x_y_gesture(file_paths[2])
-# sample_input = sample_input.unsqueeze(0)  # Reshape to match model input
-model.eval()
-with torch.no_grad():
-    predictions = model(sample_input)
-print(f"Predicted Gesture: {predictions}, Actual Gesture: {gesture}")
