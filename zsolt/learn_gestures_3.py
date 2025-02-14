@@ -13,7 +13,7 @@ file_paths = []
 # Get all files in the current directory
 for file_name in os.listdir("."):
     # Check if the file name starts with 'gesture_' and ends with '.csv'
-    if file_name.startswith("gesture_1") and file_name.endswith(".csv"):
+    if file_name.startswith("gesture_") and file_name.endswith(".csv"):
         file_paths.append(file_name)
 
 file_paths.sort()
@@ -62,13 +62,6 @@ class RNNModel(nn.Module):
         out = self.fc(out[-1])  # Take last output
         return out.squeeze()
 
-# Model parameters
-input_size = sequence_length
-hidden_size = 52
-num_layers = 2
-model = RNNModel(input_size, hidden_size, num_layers)
-criterion = nn.MSELoss()
-
 def get_x_y_gesture(file_path):
     df = pd.read_csv(file_path, skiprows=1, header=None)
     df = df.apply(normalize)
@@ -87,7 +80,9 @@ def get_x_y_gesture(file_path):
 
     return X, y, gesture
 
-def epoch_learn(epoch):
+def epoch_learn():
+    model.train
+
     # Load dataset
     for file_path in file_paths:    
         X, y, gesture = get_x_y_gesture(file_path)
@@ -125,11 +120,26 @@ def predict(epoch):
         print(f"Epoch {epoch+1}/{epochs}, Predicted Gesture: {predictions}, Actual Gesture: {gesture}, Diff: {diff}, !!!!!!!!")
 
 
+
+# Model parameters
+input_size = sequence_length
+hidden_size = 52
+num_layers = 2
+model = RNNModel(input_size, hidden_size, num_layers)
+criterion = nn.MSELoss()
+
+if os.path.exists('learn_gestures_3.pth'):
+    print("Loading trained model")
+    model_state = torch.load('learn_gestures_3.pth')
+    model.load_state_dict(model_state)
+
 # Training loop
 epochs = 1000
 for epoch in range(epochs):
-    epoch_learn(epoch)
+    epoch_learn()
     predict(epoch)
     
 print("Process complete.")
 
+print("Saving trained model")
+torch.save(model.state_dict(), 'learn_gestures_3.pth')
