@@ -41,9 +41,7 @@ def create_sequences(data, seq_length, gesture):
     targets = []
     for i in range(len(data)):
         seq = data.iloc[i].values
-        if len(seq) != seq_length:
-            i = i
-        label = gesture;
+        label = gesture
         sequences.append(seq)
         targets.append(label)
     return np.array(sequences), np.array(targets)

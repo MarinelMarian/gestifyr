@@ -57,8 +57,6 @@ def get_sample_input_from_file(test_file_path):
     sequences = []
     for i in range(len(data)):
         seq = data.iloc[i].values
-        if len(seq) != sequence_length:
-            i = i
         sequences.append(seq)
 
     sequences = np.array(sequences)
