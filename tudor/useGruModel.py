@@ -6,17 +6,48 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 import joblib
 import cv2
 from collections import deque
-from mediapipe_extract import extractFeaturesv2, extractFeatures, featureNormalization
+from mediapipe_extract import extractFeaturesv2, extractFeatures, featureNormalization, getDistanteBetweenCornerEyes
 from tools import clearTerminal
 import json
+import numpy as np
+
+points_to_get_angles = [1, 61 , 291, 33, 263, 199]
+img_w,img_h = 1980,1080
+def getAngles(result_features):
+    sublist = [result_features[i] for i in points_to_get_angles]
+    face_3d = [ [int(e[0]*img_w), int(e[1]*img_h), e[2] ] for e in sublist] 
+    face_3d = np.array(face_3d, dtype=np.float64)
+    face_2d = np.array(face_3d[:, 0:2],  dtype=np.float64)
+    focal_length = 1 * img_w
+
+    cam_matrix = np.array([ [focal_length, 0, img_h / 2],
+                            [0, focal_length, img_w / 2],
+                            [0, 0, 1]])
+
+    # The distortion parameters
+    dist_matrix = np.zeros((4, 1), dtype=np.float64)
+
+    # Solve PnP
+    success, rot_vec, trans_vec = cv2.solvePnP(face_3d, face_2d, cam_matrix, dist_matrix)
+    
+                # Get rotational matrix
+    rmat, jac = cv2.Rodrigues(rot_vec)
+
+    # Get angles
+    angles, mtxR, mtxQ, Qx, Qy, Qz = cv2.RQDecomp3x3(rmat)
+
+    # Get the y rotation degree
+    x = angles[0] * 360
+    y = angles[1] * 360
+    z = angles[2] * 360
+    return x,y,z
 
 clearTerminal()
 
 # ----- init params --------
-queueFrameSize = 30
 
 # Model parameters
-metadataFilename = "tudor/model/raw_normalized64_3/info_model.txt"
+metadataFilename = "tudor/model/raw_normalized/gru_1740421523/info_model.txt"
 with open(metadataFilename, "r") as file:
     data = json.load(file)
 input_size = data['input_size']  # Feature size 478 points of x,y,z
@@ -27,7 +58,8 @@ savedModelFileName = data['modelFile']
 savedScalerFileName = data['scalerFile']
 labels = ['da','nu ','gura casca','ridicat', 'nimic']
 print(f'Loaded inputSize={input_size}, hiddenSize={hidden_size}, outputSize={output_size}, numLayers={num_layers}, modelFile={savedModelFileName}')
-
+windowStepInFrames = 60
+windowSizeInFrames = 45
 # -----------
 
 
@@ -54,11 +86,8 @@ scaler = joblib.load(savedScalerFileName)
 
 print("Model loaded successfully!")
 
-
-
-
 cap = cv2.VideoCapture(0)  # Open the default webcam
-frameQueue = deque(maxlen=queueFrameSize)
+frameQueue = deque(maxlen=windowSizeInFrames)
 shouldExit = False
 if not cap.isOpened():
     print("Error: Could not open webcam.")
@@ -85,7 +114,10 @@ while not shouldExit:
     cv2.imshow('Capturing Frames', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
-    if idx % 10 == 0: 
+    if idx % windowStepInFrames == 0: 
+  
+
+        
         features2test = torch.tensor(scaler.transform(frameQueue), dtype=torch.float32).unsqueeze(0)
         #predict
         with torch.no_grad():
