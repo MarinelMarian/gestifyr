@@ -75,11 +75,19 @@ model_state = torch.load(trained_model_file_path)
 model.load_state_dict(model_state)
 model.eval()
 
+# Normalize data
+def normalize(data):
+    return (data - data.min()) / (data.max() - data.min())
+
 # gesture prediction by a sample input
 # default input_size, hidden_size and num_layers are the values this model was trained with
 # return value is a number from 1 to 5, referring to the gesture number that is predicts
 def predictLabel(frameQueue) -> int:
     frameQueue = np.array(frameQueue)
+
+    # !!!!! model was trained with normalization, on a 50+ row set of data
+    frameQueue = normalize(frameQueue)
+    
     frameQueue = torch.tensor(frameQueue, dtype=torch.float32)
 
     # generate a prediction
