@@ -1,0 +1,15 @@
+{
+    "modelFile": "tudor/model/processed_trimmed/gru_1740769304/gru_model.pth",
+    "scalerFile": "tudor/model/processed_trimmed/gru_1740769304/scaler.pkl",
+    "hidden_size": 512,
+    "num_layers": 2,
+    "labels": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+    ],
+    "input_size": 6,
+    "output_size": 5
+}
