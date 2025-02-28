@@ -21,6 +21,9 @@ def getDistanteBetweenEyes(points:np.ndarray):
     rightEyeMiddle = ( points[362] + points[263] ) / 2
     return np.sqrt( np.sum( np.square(leftEyeMiddle - rightEyeMiddle) ) )
 
+def getDistanteBetweenCornerEyes(points:np.ndarray):
+    return np.sqrt( np.sum( np.square(points[33] - points[263]) ) )
+
 def extractFeatures(frame:cv2.typing.MatLike):
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_mesh.process(rgb_frame)
