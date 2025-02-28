@@ -4,6 +4,13 @@ import mediapipe as mp
 from mediapipe.tasks.python import vision
 from mediapipe.tasks import python
 
+# === Added by Zsolt ===
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+# === END added by Zsolt ===
 
 
 
@@ -37,6 +44,50 @@ def extractFeaturesv2(frame:cv2.typing.MatLike):
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
     detection_result = detector.detect(mp_image)
     return detection_result
+# ============================
+
+# ============================
+# Code added by Zsolt
+
+## PREDICTION
+trained_model_file_path = "tudor/trained_model_OK15_e1484_p93__1740582936.pth"
+
+# Define RNN Model
+class RNNModel(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers):
+        super(RNNModel, self).__init__()
+        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        out, _ = self.rnn(x)
+        out = self.fc(out[-1])  # Take last output
+        return out.squeeze()
+
+# Define the model
+input_size = 52
+hidden_size = 52
+num_layers = 2
+model = RNNModel(input_size, hidden_size, num_layers)
+
+# load the trained model
+model_state = torch.load(trained_model_file_path)
+model.load_state_dict(model_state)
+model.eval()
+
+# gesture prediction by a sample input
+# default input_size, hidden_size and num_layers are the values this model was trained with
+# return value is a number from 1 to 5, referring to the gesture number that is predicts
+def predictLabel(frameQueue) -> int:
+    frameQueue = np.array(frameQueue)
+    frameQueue = torch.tensor(frameQueue, dtype=torch.float32)
+
+    # generate a prediction
+    with torch.no_grad():
+        prediction = model(frameQueue)
+
+    return int(prediction * 10), 0
+# End of code added by Zsolt
 # ============================
 
 idx = 0
