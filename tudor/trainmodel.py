@@ -12,21 +12,23 @@ import torch.nn.functional as F
 import joblib
 import json
 import os
+import datetime as dt
+
 
 
 # --------- Init Params -------
-train_files = glob.glob("tudor/samples2/raw_normalized/*.csv")
 #Model params
-hidden_size = 64
-num_layers = 3
+# hidden_size = 128
+# num_layers = 4
 epochs = 1000
-modelName = 'raw_normalized64_3'
-saveModelFileName = f"tudor/model/{modelName}/gru_model.pth"
-saveScalerFileName = f"tudor/model/{modelName}/scaler.pkl"
-modelMetadataFile = f"tudor/model/{modelName}/info_model.txt"
 
+epochThresh = 0.1
 # ---------------------
-os.makedirs(f'tudor/model/{modelName}', exist_ok=True)
+modelInputs = { 'filePath':['tudor/samples2/processed_trimmed'], # list of folders
+               'hiddenSize':[16, 32, 64, 128, 256, 512],
+               'numLayers' : [2, 3, 4],
+               'epochThresh' :[0.5, 0.1, 0.05]
+               } 
 
 # Define GRU Model
 class GRUNet(nn.Module):
@@ -72,70 +74,71 @@ def collate_fn(batch):
     labels = torch.tensor(labels, dtype=torch.long)
     return sequences_padded, labels
 
+
 # Load and process data
+def calculateModel(**kwargs):
+    print('\n\n\n-------------------')
+    print(f"Starting new model calculation with params :{kwargs}")
+    outputFolder = kwargs["filePath"].split('/')[-1]
 
-labels = sorted(set(os.path.basename(f).split('_')[1] for f in train_files))
-print(f'Labels found: {labels}')
-label_encoder = LabelEncoder()
-label_encoder.fit(labels)
-scaler = StandardScaler()
+    modelName = f'gru_{int(dt.datetime.now().timestamp())}'
+    os.makedirs(f'tudor/model/{outputFolder}/{modelName}', exist_ok=True)
+    saveModelFileName = f"tudor/model/{outputFolder}/{modelName}/gru_model.pth"
+    saveScalerFileName = f"tudor/model/{outputFolder}/{modelName}/scaler.pkl"
+    modelMetadataFile = f"tudor/model/{outputFolder}/{modelName}/info_model.txt"
+    train_files = glob.glob(f'{kwargs["filePath"]}/*.csv')
+    labels = sorted(set(os.path.basename(f).split('_')[1] for f in train_files))
+    print(f'Labels found: {labels}')
+    label_encoder = LabelEncoder()
+    label_encoder.fit(labels)
+    scaler = StandardScaler()
 
-train_dataset = GestureDataset(train_files, label_encoder, scaler, train=True)
-train_loader = DataLoader(train_dataset, batch_size=5, shuffle=True, collate_fn=collate_fn)
-
-
-# Model parameters
-input_size = next(iter(train_dataset))[0].shape[1]  # Feature size
-output_size = len(labels)
-
-
-model = GRUNet(input_size, hidden_size, output_size, num_layers)
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-# Training loop
-for epoch in range(epochs):
-    model.train()
-    total_loss = 0
-    for inputs, targets in train_loader:
-        inputs = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True)
-        targets = targets
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
-    print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(train_loader):.4f}")
-    if total_loss/len(train_loader) < 0.01:
-        break
-torch.save(model.state_dict(), saveModelFileName)
-joblib.dump(scaler, saveScalerFileName)
-metadata = {
-    'modelFile': saveModelFileName,
-    'scalerFile': saveScalerFileName,
-    'hidden_size' : hidden_size,
-    "num_layers" : num_layers,
-    "labels": labels,
-    "input_size": input_size,
-    "output_size": output_size
-}
-with open(modelMetadataFile, "w") as file:
-    json.dump(metadata, file, indent=4)
-    print(f"MetaData saved successfully! to file {file}")
-print("Model saved successfully!")
-# # Evaluation
-# model.eval()
-# with torch.no_grad():
-#     for inputs, _ in test_loader:
-#         # inputs = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True)
-#         outputs = model(inputs)
-#         # Apply softmax to get probabilities
-#         probabilities = F.softmax(outputs, dim=1)
-#          # Get predicted class and confidence
-#         predicted_class = torch.argmax(probabilities, dim=1)
-#         confidence = torch.max(probabilities, dim=1).values
+    train_dataset = GestureDataset(train_files, label_encoder, scaler, train=True)
+    train_loader = DataLoader(train_dataset, batch_size=5, shuffle=True, collate_fn=collate_fn)
 
 
-#         predicted_label = label_encoder.inverse_transform([predicted_class.item()])[0]
-#         print(f"Predicted Gesture: {predicted_label}, Confidence: {confidence.item():.4f}")
+    # Model parameters
+    input_size = next(iter(train_dataset))[0].shape[1]  # Feature size
+    output_size = len(labels)
+
+
+    model = GRUNet(input_size, kwargs['hiddenSize'], output_size, kwargs['numLayers'])
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    # Training loop
+    for epoch in range(epochs):
+        model.train()
+        total_loss = 0
+        for inputs, targets in train_loader:
+            inputs = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True)
+            targets = targets
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(train_loader):.4f}")
+        if total_loss/len(train_loader) < kwargs['epochThresh']:
+            break
+    torch.save(model.state_dict(), saveModelFileName)
+    joblib.dump(scaler, saveScalerFileName)
+    metadata = {
+        'modelFile': saveModelFileName,
+        'scalerFile': saveScalerFileName,
+        'hidden_size' : kwargs['hiddenSize'],
+        "num_layers" : kwargs['numLayers'],
+        "labels": labels,
+        "input_size": input_size,
+        "output_size": output_size
+    }
+    with open(modelMetadataFile, "w") as file:
+        json.dump(metadata, file, indent=4)
+        print(f"MetaData saved successfully! to file {file}")
+    print("Model saved successfully!")
+for filePath in modelInputs['filePath']:
+    for hiddenSize in modelInputs['hiddenSize']:
+        for numLayers in modelInputs['numLayers']:
+            for epochThresh in modelInputs['epochThresh']:
+                calculateModel(filePath=filePath, hiddenSize=hiddenSize, numLayers=numLayers, epochThresh=epochThresh)
