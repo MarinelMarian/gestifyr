@@ -47,7 +47,7 @@ clearTerminal()
 # ----- init params --------
 
 # Model parameters
-metadataFilename = "tudor/model/raw_normalized/gru_1740421523/info_model.txt"
+metadataFilename = "tudor/model/raw_normalized/gru_1740425783/info_model.txt"
 with open(metadataFilename, "r") as file:
     data = json.load(file)
 input_size = data['input_size']  # Feature size 478 points of x,y,z
@@ -86,7 +86,7 @@ scaler = joblib.load(savedScalerFileName)
 
 print("Model loaded successfully!")
 
-cap = cv2.VideoCapture(0)  # Open the default webcam
+cap = cv2.VideoCapture(1)  # Open the default webcam
 frameQueue = deque(maxlen=windowSizeInFrames)
 shouldExit = False
 if not cap.isOpened():
