@@ -17,10 +17,10 @@ load_dotenv()
 BASE_PATH = os.getenv("BASE_PATH")
 
 # ----- user params --------
-queueFrameSizeSec = (
+queue_frame_size_sec = (
     1.5  # window length in seconds. This window will be the input to prediction
 )
-analyseVideoStepSec = (
+analyse_video_step_sec = (
     1  # in seconds, how much time should pass until next window is analyzed
 )
 # ------------------------
@@ -34,33 +34,33 @@ if not cap.isOpened():
 # Get the frames per second (FPS) of the video
 # cap.set(cv2.CAP_PROP_EXPOSURE, 40)
 fps = cap.get(cv2.CAP_PROP_FPS)
-queueFrameSize = int(fps * queueFrameSizeSec)
-analyseVideoStep = int(fps * analyseVideoStepSec)
-frameQueue = deque(maxlen=queueFrameSize)
+queue_frame_size = int(fps * queue_frame_size_sec)
+analyse_video_step = int(fps * analyse_video_step_sec)
+frame_queue = deque(maxlen=queue_frame_size)
 
 
 clear_terminal()
 
 
 # Model parameters
-metadataFilename = (
+metadata_filename = (
     f"{BASE_PATH}tudor/model/processed_trimmed/gru_1741016164/info_model.txt"
 )
-with open(metadataFilename, "r") as file:
+with open(metadata_filename, "r") as file:
     data = json.load(file)
 input_size = data["input_size"]
 hidden_size = data["hidden_size"]
 output_size = data["output_size"]
 num_layers = data["num_layers"]
-savedModelFileName = f"{BASE_PATH}{data['modelFile']}"
-savedScalerFileName = f"{BASE_PATH}{data['scalerFile']}"
+saved_model_file_name = f"{BASE_PATH}{data['modelFile']}"
+saved_scaler_file_name = f"{BASE_PATH}{data['scalerFile']}"
 labels = ["da", "nu ", "gura casca", "ridicat", "nimic"]
 print(
-    f"Loaded inputSize={input_size}, hiddenSize={hidden_size}, outputSize={output_size}, numLayers={num_layers}, modelFile={savedModelFileName}"
+    f"Loaded input_size={input_size}, hidden_size={hidden_size}, output_size={output_size}, num_layers={num_layers}, model_file={saved_model_file_name}"
 )
 
 
-# -----------
+# ----------- 
 # Define GRU Model
 class GRUNet(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_layers=1):
@@ -78,10 +78,10 @@ class GRUNet(nn.Module):
 loaded_model = GRUNet(input_size, hidden_size, output_size, num_layers)
 
 # Load the saved weights
-loaded_model.load_state_dict(torch.load(savedModelFileName))
+loaded_model.load_state_dict(torch.load(saved_model_file_name))
 loaded_model.eval()  # Set to evaluation mode
 label_encoder = LabelEncoder()
-scaler = joblib.load(savedScalerFileName)
+scaler = joblib.load(saved_scaler_file_name)
 
 print("Model loaded successfully!")
 
@@ -99,34 +99,33 @@ while True:
     result_features = extract_features_v2(frame)
     if len(result_features.face_blendshapes) == 0:
         continue
-    rawFeatures = [
+    raw_features = [
         coord
         for point in result_features.face_landmarks[0]
         for coord in (point.x, point.y, point.z)
     ]
-    processedFeatures = [c.score for c in result_features.face_blendshapes[0]]
-    featuresReduced = [processedFeatures[i] for i in points_to_extract]
-    featuresReduced.append(get_distance_between_corner_eyes(np.array(rawFeatures)))
-    x, y = get_angles(rawFeatures)
-    featuresReduced.append(x)
-    featuresReduced.append(y)
+    processed_features = [c.score for c in result_features.face_blendshapes[0]]
+    features_reduced = [processed_features[i] for i in points_to_extract]
+    x, y = get_angles(raw_features)
+    features_reduced.append(x)
+    features_reduced.append(y)
 
-    frameQueue.append(featuresReduced)
+    frame_queue.append(features_reduced)
 
     # Optional: Display the frame
     cv2.imshow("Capturing Frames", frame)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
-    if idx % analyseVideoStep == 0:
+    if idx % analyse_video_step == 0:
 
-        features2test = torch.tensor(
-            scaler.transform(frameQueue), dtype=torch.float32
+        features_to_test = torch.tensor(
+            scaler.transform(frame_queue), dtype=torch.float32
         ).unsqueeze(0)
         # predict
         with torch.no_grad():
 
             # inputs = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True)
-            outputs = loaded_model(features2test)
+            outputs = loaded_model(features_to_test)
             # Apply softmax to get probabilities
             probabilities = F.softmax(outputs, dim=1)
             # print(probabilities)

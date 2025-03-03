@@ -20,13 +20,13 @@ options = vision.FaceLandmarkerOptions(base_options=base_options,
 detector = vision.FaceLandmarker.create_from_options(options)
 
 
-def getDistanteBetweenEyes(points:np.ndarray):
+def get_distance_between_eyes(points:np.ndarray):
     leftEyeMiddle = ( points[33] + points[133] ) / 2
     rightEyeMiddle = ( points[362] + points[263] ) / 2
     return np.sqrt( np.sum( np.square(leftEyeMiddle - rightEyeMiddle) ) )
 
-def get_distance_between_corner_eyes(points:np.ndarray):
-    return np.sqrt( np.sum( np.square(points[33] - points[263]) ) )
+# def get_distance_between_corner_eyes(points:np.ndarray):
+#     return np.sqrt( np.sum( np.square(points[33] - points[263]) ) )
 
 def extract_features(frame:cv2.typing.MatLike):
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -44,11 +44,11 @@ def extract_features_v2(frame:cv2.typing.MatLike):
     return detection_result
 
 def feature_normalization(features):
-    return features / getDistanteBetweenEyes(features)
+    return features / get_distance_between_eyes(features)
 
-def get_movement_from_features(featuresWindow, pointsOfInterest):
-    deltaX = featuresWindow[:, pointsOfInterest, 0].max(axis=0) - featuresWindow[:,pointsOfInterest,0].min(axis=0)
-    deltaY = featuresWindow[:, pointsOfInterest, 1].max(axis=0) - featuresWindow[:,pointsOfInterest,1].min(axis=0)
-    deltaZ = featuresWindow[:, pointsOfInterest, 2].max(axis=0) - featuresWindow[:,pointsOfInterest,2].min(axis=0)
-    return math.sqrt( (deltaX**2).sum() + (deltaY**2).sum() + (deltaZ**2).sum())
+def get_movement_from_features(features_window, points_of_interest):
+    delta_x = features_window[:, points_of_interest, 0].max(axis=0) - features_window[:,points_of_interest,0].min(axis=0)
+    delta_y = features_window[:, points_of_interest, 1].max(axis=0) - features_window[:,points_of_interest,1].min(axis=0)
+    delta_z = features_window[:, points_of_interest, 2].max(axis=0) - features_window[:,points_of_interest,2].min(axis=0)
+    return math.sqrt( (delta_x**2).sum() + (delta_y**2).sum() + (delta_z**2).sum())
 

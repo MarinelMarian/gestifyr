@@ -3,19 +3,18 @@ from mediapipe_extract import (
     extract_features,
     feature_normalization,
     extract_features_v2,
-    get_distance_between_corner_eyes,
 )
 import numpy as np
 
 
-def play_video_and_extract(cap, startSec, stopSec):
+def play_video_and_extract(cap, start_sec, stop_sec):
     fps = cap.get(cv2.CAP_PROP_FPS)
     if not cap.isOpened():
         print("Error: Cannot open video file")
         exit()
 
-    start_frame = int(startSec * fps)  # Define start frame
-    end_frame = int(stopSec * fps)  # Define end frame
+    start_frame = int(start_sec * fps)  # Define start frame
+    end_frame = int(stop_sec * fps)  # Define end frame
 
     # Set the starting frame
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
@@ -46,18 +45,18 @@ points_to_extract = [
 points_to_get_angles = [1, 61, 291, 33, 263, 199]
 
 
-def extract_features_for_gesture(cap, startSec, stopSec):
+def extract_features_for_gesture(cap, start_sec, stop_sec):
     fps = cap.get(cv2.CAP_PROP_FPS)
     if not cap.isOpened():
         print("Error: Cannot open video file")
         exit()
 
-    start_frame = int(startSec * fps)  # Define start frame
-    end_frame = int(stopSec * fps)  # Define end frame
-    rawFeatures = []
-    rawFeaturesNormalized = []
-    processedFeatures = []
-    reducedFeatures = []
+    start_frame = int(start_sec * fps)  # Define start frame
+    end_frame = int(stop_sec * fps)  # Define end frame
+    raw_features = []
+    raw_features_normalized = []
+    processed_features = []
+    reduced_features = []
     # Set the starting frame
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     while True:
@@ -71,23 +70,22 @@ def extract_features_for_gesture(cap, startSec, stopSec):
         if not ret:
             break  # Exit if video ends or there's an error
         result_features = extract_features_v2(frame)
-        rawArray = np.array(
+        raw_array = np.array(
             [[el.x, el.y, el.z] for el in result_features.face_landmarks[0]]
         )
-        rawArrayNormalized = feature_normalization(rawArray.copy())
-        rawArrayRow = rawArray.reshape(-1)
-        rawFeatures.append(list(rawArrayRow))
-        rawFeaturesNormalized.append(list(rawArrayNormalized.reshape(-1)))
-        processedFeaturesRow = [c.score for c in result_features.face_blendshapes[0]]
-        processedFeatures.append(processedFeaturesRow)
-        reducedFeaturesRow = [processedFeaturesRow[i] for i in points_to_extract]
-        reducedFeaturesRow.append(get_distance_between_corner_eyes(rawArrayRow))
-        x, y = get_angles(rawArrayRow, img_w, img_h)
-        reducedFeaturesRow.append(x)
-        reducedFeaturesRow.append(y)
-        reducedFeatures.append(reducedFeaturesRow)
+        raw_array_normalized = feature_normalization(raw_array.copy())
+        raw_array_row = raw_array.reshape(-1)
+        raw_features.append(list(raw_array_row))
+        raw_features_normalized.append(list(raw_array_normalized.reshape(-1)))
+        processed_features_row = [c.score for c in result_features.face_blendshapes[0]]
+        processed_features.append(processed_features_row)
+        reduced_features_row = [processed_features_row[i] for i in points_to_extract]
+        x, y = get_angles(raw_array_row, img_w, img_h)
+        reduced_features_row.append(x)
+        reduced_features_row.append(y)
+        reduced_features.append(reduced_features_row)
 
-    return (rawFeatures, rawFeaturesNormalized, processedFeatures, reducedFeatures)
+    return (raw_features, raw_features_normalized, processed_features, reduced_features)
 
 
 def get_angles(result_features, img_w=1980, img_h=1080):

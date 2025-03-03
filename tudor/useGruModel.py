@@ -10,7 +10,6 @@ from mediapipe_extract import (
     extract_features_v2,
     extract_features,
     feature_normalization,
-    get_distance_between_corner_eyes,
 )
 from tools import clear_terminal
 import json
@@ -20,7 +19,7 @@ points_to_get_angles = [1, 61, 291, 33, 263, 199]
 img_w, img_h = 1980, 1080
 
 
-def getAngles(result_features):
+def get_angles(result_features):
     sublist = [result_features[i] for i in points_to_get_angles]
     face_3d = [[int(e[0] * img_w), int(e[1] * img_h), e[2]] for e in sublist]
     face_3d = np.array(face_3d, dtype=np.float64)
