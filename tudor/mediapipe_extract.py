@@ -21,10 +21,10 @@ def getDistanteBetweenEyes(points:np.ndarray):
     rightEyeMiddle = ( points[362] + points[263] ) / 2
     return np.sqrt( np.sum( np.square(leftEyeMiddle - rightEyeMiddle) ) )
 
-def getDistanteBetweenCornerEyes(points:np.ndarray):
+def get_distance_between_corner_eyes(points:np.ndarray):
     return np.sqrt( np.sum( np.square(points[33] - points[263]) ) )
 
-def extractFeatures(frame:cv2.typing.MatLike):
+def extract_features(frame:cv2.typing.MatLike):
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_mesh.process(rgb_frame)
     if results.multi_face_landmarks:
@@ -33,16 +33,16 @@ def extractFeatures(frame:cv2.typing.MatLike):
         return features
     return np.array([])
 
-def extractFeaturesv2(frame:cv2.typing.MatLike):
+def extract_features_v2(frame:cv2.typing.MatLike):
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
     detection_result = detector.detect(mp_image)
     return detection_result
 
-def featureNormalization(features):
+def feature_normalization(features):
     return features / getDistanteBetweenEyes(features)
 
-def getMovementFromFeatures(featuresWindow, pointsOfInterest):
+def get_movement_from_features(featuresWindow, pointsOfInterest):
     deltaX = featuresWindow[:, pointsOfInterest, 0].max(axis=0) - featuresWindow[:,pointsOfInterest,0].min(axis=0)
     deltaY = featuresWindow[:, pointsOfInterest, 1].max(axis=0) - featuresWindow[:,pointsOfInterest,1].min(axis=0)
     deltaZ = featuresWindow[:, pointsOfInterest, 2].max(axis=0) - featuresWindow[:,pointsOfInterest,2].min(axis=0)
