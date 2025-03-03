@@ -19,7 +19,7 @@ analyseVideoStepSec = 1 #in seconds, how much time should pass until next window
 
 
 # ~~~~~~ init ~~~~~
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 if not cap.isOpened():
     print("Error: Could not open webcam.")
 # Get the frames per second (FPS) of the video
@@ -70,7 +70,7 @@ scaler = joblib.load(savedScalerFileName)
 
 print("Model loaded successfully!")
 
-cap = cv2.VideoCapture(0)  # Open the default webcam
+cap = cv2.VideoCapture(1)  # Open the default webcam
 if not cap.isOpened():
     print("Error: Could not open webcam.")
 idx = 0
