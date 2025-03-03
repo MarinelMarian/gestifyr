@@ -34,7 +34,7 @@ clearTerminal()
 
 
 # Model parameters
-metadataFilename = "tudor/model/processed_trimmed/gru_1740767086/info_model.txt"
+metadataFilename = "tudor/model/processed_trimmed/gru_1741016164/info_model.txt"
 with open(metadataFilename, "r") as file:
     data = json.load(file)
 input_size = data['input_size']  
