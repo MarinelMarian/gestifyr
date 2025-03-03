@@ -3,12 +3,16 @@ import mediapipe as mp
 import numpy as np
 import math
 from mediapipe.tasks.python import vision, BaseOptions
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
+BASE_PATH = os.getenv("BASE_PATH")
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, min_detection_confidence=0.5, refine_landmarks=True)
 
 # base_options = python.BaseOptions(model_asset_path='tudor/face_landmarker_v2_with_blendshapes.task')
-base_options = BaseOptions(model_asset_buffer=open('D:/onedrive/source/repos/gestifyr/tudor/face_landmarker_v2_with_blendshapes.task', "rb").read())
+base_options = BaseOptions(model_asset_buffer=open(f'{BASE_PATH}tudor/face_landmarker_v2_with_blendshapes.task', "rb").read())
 options = vision.FaceLandmarkerOptions(base_options=base_options,
                                        output_face_blendshapes=True,
                                        output_facial_transformation_matrixes=True,
