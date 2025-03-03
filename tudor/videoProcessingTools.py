@@ -1,5 +1,5 @@
 import cv2
-from mediapipe_extract import extractFeatures, featureNormalization , extractFeaturesv2
+from mediapipe_extract import extractFeatures, featureNormalization , extractFeaturesv2, getDistanteBetweenCornerEyes
 import numpy as np
 
 def playVideoAndExtract(cap, startSec, stopSec):
@@ -25,6 +25,9 @@ def playVideoAndExtract(cap, startSec, stopSec):
         if cv2.waitKey(int(1000/fps)) & 0xFF == ord("q"):  # Press 'q' to exit
             break   
 
+points_to_extract = [4,5, 25] # zero position indexs, browOuterUpLeft, browOuterUpRight, jawOpen
+points_to_get_angles = [1, 61 , 291, 33, 263, 199]
+img_w,img_h = 1980,1080
 
 def extractFeatures4gesture(cap, startSec, stopSec):
     fps = cap.get(cv2.CAP_PROP_FPS)   
@@ -37,6 +40,7 @@ def extractFeatures4gesture(cap, startSec, stopSec):
     rawFeatures = []
     rawFeaturesNormalized = []
     processedFeatures = []
+    reducedFeatures = []
     # Set the starting frame
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     while True:
@@ -49,14 +53,22 @@ def extractFeatures4gesture(cap, startSec, stopSec):
         result_features = extractFeaturesv2(frame)
         rawArray = np.array([[el.x, el.y, el.z] for el in result_features.face_landmarks[0]])
         rawArrayNormalized = featureNormalization(rawArray.copy())
-        rawFeatures.append(list(rawArray.reshape(-1)))
+        rawArrayRow = rawArray.reshape(-1)
+        rawFeatures.append(list(rawArrayRow))
         rawFeaturesNormalized.append(list(rawArrayNormalized.reshape(-1)))
-        processedFeatures.append([c.score for c in result_features.face_blendshapes[0]])
-    return (rawFeatures, rawFeaturesNormalized, processedFeatures)
+        processedFeaturesRow = [c.score for c in result_features.face_blendshapes[0]]
+        processedFeatures.append(processedFeaturesRow)
+        reducedFeaturesRow =[processedFeaturesRow[i] for i in points_to_extract]
+        reducedFeaturesRow.append(getDistanteBetweenCornerEyes(rawArrayRow))
+        x,y = getAngles(rawArrayRow)
+        reducedFeaturesRow.append(x)
+        reducedFeaturesRow.append(y)
+        reducedFeatures.append(reducedFeaturesRow)
 
-points_to_extract = [4,5, 25] # zero position indexs, browOuterUpLeft, browOuterUpRight, jawOpen
-points_to_get_angles = [1, 61 , 291, 33, 263, 199]
-img_w,img_h = 1980,1080
+
+    return (rawFeatures, rawFeaturesNormalized, processedFeatures, reducedFeatures)
+
+
 
 def getAngles(result_features):
     sublist = []
