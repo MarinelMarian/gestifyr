@@ -2,3 +2,4 @@ tudor/__pycache__/
 myenv/
 .DS_Store
 tudor/movie/
+.env
