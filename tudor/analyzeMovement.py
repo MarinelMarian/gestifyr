@@ -14,7 +14,8 @@ BASE_PATH = os.getenv("BASE_PATH")
 clear_terminal()
 
 # ------ Input data ---------
-movement_file = f"{BASE_PATH}tudor/movie/gest1-4.csv"
+movement_file = f"{BASE_PATH}tudor/movies/gest1-4.csv"
+samples_folder = f"{BASE_PATH}tudor/samples3/"
 # -------------------
 
 
@@ -26,7 +27,7 @@ with open(movement_file, "r") as file:
     video_file = next(reader)
     header_names = next(reader)
     data = [list(map(float, row)) for row in reader]
-cap = cv2.VideoCapture(video_file[0])
+cap = cv2.VideoCapture(f"{BASE_PATH}{video_file[0]}")
 fps = cap.get(cv2.CAP_PROP_FPS)
 # ~~~~~~~~~~~~~~~~~~
 
@@ -81,19 +82,19 @@ def on_key_press(event):
             )
         )
         file_name_raw = (
-            f"{BASE_PATH}tudor/samples3/raw/gesture_{event.key}__{timestamp}.csv"
+            f"{samples_folder}raw/gesture_{event.key}__{timestamp}.csv"
         )
         first_row = [
             [dict([("gestureId", event.key), ("fps", cap.get(cv2.CAP_PROP_FPS))])]
         ]
         write_to_csv(file_name_raw, first_row + raw_features)
-        file_name_raw_norm = f"{BASE_PATH}tudor/samples3/raw_normalized/gesture_{event.key}__{timestamp}.csv"
+        file_name_raw_norm = f"{samples_folder}raw_normalized/gesture_{event.key}__{timestamp}.csv"
         write_to_csv(file_name_raw_norm, first_row + raw_features_normalized)
         file_name_processed = (
-            f"{BASE_PATH}tudor/samples3/processed/gesture_{event.key}__{timestamp}.csv"
+            f"{samples_folder}processed/gesture_{event.key}__{timestamp}.csv"
         )
         write_to_csv(file_name_processed, first_row + processed_features)
-        file_name_processed = f"{BASE_PATH}tudor/samples3/processed_trimmed/gesture_{event.key}__{timestamp}.csv"
+        file_name_processed = f"{samples_folder}processed_trimmed/gesture_{event.key}__{timestamp}.csv"
         write_to_csv(file_name_processed, first_row + reduced_features)
 
         print("Done saving")

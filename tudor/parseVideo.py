@@ -21,13 +21,13 @@ BASE_PATH = os.getenv("BASE_PATH")
 # ~~~~~~ Setup params ~~~~~~~~~~~
 window_length_ms = 500
 window_overlap_ratio = 0.5
-input_file_path = f"{BASE_PATH}tudor/movie/WIN_20250303_21_20_32_Pro.mp4"
-csv_output_file = f"{BASE_PATH}tudor/movie/gest1-4.csv"
+input_file_path = "tudor/movies/WIN_20250303_21_20_32_Pro.mp4"
+csv_output_file = "tudor/movies/gest1-4.csv"
 clear_terminal()
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # ----- Read video , show details ----
-cap = cv2.VideoCapture(input_file_path)
+cap = cv2.VideoCapture(f"{BASE_PATH}{input_file_path}")
 video_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 video_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
 fps = cap.get(cv2.CAP_PROP_FPS)
@@ -95,7 +95,7 @@ step = math.floor((1 - window_overlap_ratio) * fps)
 
 # --------- print results ---------
 write_to_csv(
-    csv_output_file,
+    f"{BASE_PATH}{csv_output_file}",
     [
         [input_file_path],
         [
