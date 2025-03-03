@@ -17,12 +17,15 @@ queueFrameSizeSec = 1.5 #window length in seconds. This window will be the input
 analyseVideoStepSec = 1 #in seconds, how much time should pass until next window is analyzed
 #------------------------
 
+BASE_PATH = "D:/onedrive/source/repos/gestifyr/"
+
 
 # ~~~~~~ init ~~~~~
 cap = cv2.VideoCapture(1)
 if not cap.isOpened():
     print("Error: Could not open webcam.")
 # Get the frames per second (FPS) of the video
+# cap.set(cv2.CAP_PROP_EXPOSURE, 40)
 fps = cap.get(cv2.CAP_PROP_FPS)
 queueFrameSize = int(fps * queueFrameSizeSec)
 analyseVideoStep = int(fps * analyseVideoStepSec)
@@ -34,15 +37,15 @@ clearTerminal()
 
 
 # Model parameters
-metadataFilename = "tudor/model/processed_trimmed/gru_1741016164/info_model.txt"
+metadataFilename = f"{BASE_PATH}tudor/model/processed_trimmed/gru_1741016164/info_model.txt"
 with open(metadataFilename, "r") as file:
     data = json.load(file)
 input_size = data['input_size']  
 hidden_size = data['hidden_size']
 output_size = data['output_size']
 num_layers = data['num_layers']
-savedModelFileName = data['modelFile']
-savedScalerFileName = data['scalerFile']
+savedModelFileName = f"{BASE_PATH}{data['modelFile']}"
+savedScalerFileName = f"{BASE_PATH}{data['scalerFile']}"
 labels = ['da','nu ','gura casca','ridicat', 'nimic']
 print(f'Loaded inputSize={input_size}, hiddenSize={hidden_size}, outputSize={output_size}, numLayers={num_layers}, modelFile={savedModelFileName}')
 

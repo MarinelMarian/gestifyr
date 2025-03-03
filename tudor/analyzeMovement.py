@@ -6,11 +6,12 @@ from videoProcessingTools import playVideoAndExtract, extractFeatures4gesture
 import cv2
 import datetime as dt
 
+BASE_PATH = "D:/onedrive/source/repos/gestifyr/"
 
 clearTerminal()
 
-# ------ Inpud data ---------
-movementFile = 'movement_output.csv'
+# ------ Input data ---------
+movementFile = f'{BASE_PATH}tudor/movie/gest1-4.csv'
 # -------------------
 
 
@@ -49,7 +50,7 @@ def onKeyPress(event):
         fig.canvas.draw()  # Update the figure
     if event.key == 'a':
         playVideoAndExtract(cap, latestStartCoordinate, latestStopCoordinate)
-    if event.key in ['1','2','3','4','5','6','7','8','9']:
+    if event.key in ['1','2','3','4','5','6','7','8','9']: # 6 - long blink
         rawFeatures, rawFeaturesNormalized, processedFeatures = extractFeatures4gesture(cap, latestStartCoordinate, latestStopCoordinate)
         fileNameraw = f'tudor/raw/gesture_{event.key}__{int(dt.datetime.now().timestamp())}.csv'
         firstRow = [[dict([('gestureId', event.key), ('fps', cap.get(cv2.CAP_PROP_FPS))])]]

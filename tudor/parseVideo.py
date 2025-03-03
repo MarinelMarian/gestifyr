@@ -5,11 +5,14 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
+
+BASE_PATH = "D:/onedrive/source/repos/gestifyr/"
+
 # ~~~~~~ Setup params ~~~~~~~~~~~
 windowLenghtMs = 500
 windowOverlapRatio = 0.5
-inputFilePath = './tudor/gest1-4.mov'
-csvOutputFile = 'gest1-4.csv'
+inputFilePath = f'{BASE_PATH}tudor/movie/WIN_20250303_21_20_32_Pro.mp4'
+csvOutputFile = f'{BASE_PATH}tudor/movie/gest1-4.csv'
 clearTerminal()
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -37,7 +40,7 @@ for frameNr in range(0, frame_count-1):
     print("Reading frame nr {} from total of {}".format(frameNr, frame_count-1), end='\r')
     if ret:
         allFeatures[frameNr, :, :] = extractFeatures(frame)
-        # showPointsOfInterest(frame, allFeatures[frameNr, :, :], pointsOfInterest)
+        showPointsOfInterest(frame, allFeatures[frameNr, :, :], pointsOfInterest)
 
 print('\nDone')
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
