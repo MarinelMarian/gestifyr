@@ -1,3 +1,4 @@
+import os
 import cv2
 from tools import clear_terminal, show_points_of_interest, write_to_csv
 from mediapipe_extract import (
@@ -13,7 +14,11 @@ import matplotlib.pyplot as plt
 
 from videoProcessingTools import get_angles
 
-BASE_PATH = "D:/onedrive/source/repos/gestifyr/"
+from dotenv import load_dotenv
+
+load_dotenv()
+BASE_PATH = os.getenv("BASE_PATH")
+
 
 # ~~~~~~ Setup params ~~~~~~~~~~~
 windowLenghtMs = 500

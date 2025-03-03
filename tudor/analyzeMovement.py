@@ -6,8 +6,11 @@ from tools import clear_terminal, write_to_csv
 from videoProcessingTools import play_video_and_extract, extract_features_for_gesture
 import cv2
 import datetime as dt
+import os
+from dotenv import load_dotenv
 
-BASE_PATH = "D:/onedrive/source/repos/gestifyr/"
+load_dotenv()
+BASE_PATH = os.getenv("BASE_PATH")
 
 clear_terminal()
 

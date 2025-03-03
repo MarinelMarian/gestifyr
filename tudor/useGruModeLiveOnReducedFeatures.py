@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,6 +11,10 @@ from tools import clear_terminal
 import json
 import numpy as np
 from videoProcessingTools import get_angles, points_to_extract
+from dotenv import load_dotenv
+
+load_dotenv()
+BASE_PATH = os.getenv("BASE_PATH")
 
 # ----- user params --------
 queueFrameSizeSec = (
@@ -20,7 +25,6 @@ analyseVideoStepSec = (
 )
 # ------------------------
 
-BASE_PATH = "D:/onedrive/source/repos/gestifyr/"
 
 
 # ~~~~~~ init ~~~~~
