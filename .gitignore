@@ -3,3 +3,4 @@ myenv/
 .DS_Store
 tudor/movies
 .env
+**/.vscode/
