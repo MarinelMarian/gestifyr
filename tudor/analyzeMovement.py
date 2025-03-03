@@ -10,7 +10,7 @@ import datetime as dt
 clearTerminal()
 
 # ------ Inpud data ---------
-movementFile = 'movement_output.csv'
+movementFile = 'tudor/movies/newVideo_13.csv'
 # -------------------
 
 
@@ -50,14 +50,18 @@ def onKeyPress(event):
     if event.key == 'a':
         playVideoAndExtract(cap, latestStartCoordinate, latestStopCoordinate)
     if event.key in ['1','2','3','4','5','6','7','8','9']:
-        rawFeatures, rawFeaturesNormalized, processedFeatures = extractFeatures4gesture(cap, latestStartCoordinate, latestStopCoordinate)
-        fileNameraw = f'tudor/raw/gesture_{event.key}__{int(dt.datetime.now().timestamp())}.csv'
+        timestamp = int(dt.datetime.now().timestamp())
+        rawFeatures, rawFeaturesNormalized, processedFeatures, reducedFeatures = extractFeatures4gesture(cap, latestStartCoordinate, latestStopCoordinate)
+        fileNameraw = f'tudor/raw/gesture_{event.key}__{timestamp}.csv'
         firstRow = [[dict([('gestureId', event.key), ('fps', cap.get(cv2.CAP_PROP_FPS))])]]
         write2Csv(fileNameraw, firstRow + rawFeatures)
-        fileNamerawNorm = f'tudor/raw_normalized/gesture_{event.key}__{int(dt.datetime.now().timestamp())}.csv'
+        fileNamerawNorm = f'tudor/raw_normalized/gesture_{event.key}__{timestamp}.csv'
         write2Csv(fileNamerawNorm, firstRow + rawFeaturesNormalized)
-        fileNameProcessed = f'tudor/processed/gesture_{event.key}__{int(dt.datetime.now().timestamp())}.csv'
+        fileNameProcessed = f'tudor/processed/gesture_{event.key}__{timestamp}.csv'
         write2Csv(fileNameProcessed, firstRow + processedFeatures)
+        fileNameProcessed = f'tudor/processed_trimmed/gesture_{event.key}__{timestamp}.csv'
+        write2Csv(fileNameProcessed, firstRow + reducedFeatures)
+        
         print("Done saving")
          
          
