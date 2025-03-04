@@ -20,35 +20,38 @@ options = vision.FaceLandmarkerOptions(base_options=base_options,
 detector = vision.FaceLandmarker.create_from_options(options)
 
 
-def get_distance_between_eyes(points:np.ndarray):
-    leftEyeMiddle = ( points[33] + points[133] ) / 2
-    rightEyeMiddle = ( points[362] + points[263] ) / 2
-    return np.sqrt( np.sum( np.square(leftEyeMiddle - rightEyeMiddle) ) )
+def get_distance_between_eyes(points: np.ndarray):
+    left_eye_middle = (points[33] + points[133]) / 2
+    right_eye_middle = (points[362] + points[263]) / 2
+    return np.sqrt(np.sum(np.square(left_eye_middle - right_eye_middle)))
+
 
 # def get_distance_between_corner_eyes(points:np.ndarray):
 #     return np.sqrt( np.sum( np.square(points[33] - points[263]) ) )
 
-def extract_features(frame:cv2.typing.MatLike):
+def extract_features(frame: cv2.typing.MatLike):
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_mesh.process(rgb_frame)
     if results.multi_face_landmarks:
-        face_landmarks = results.multi_face_landmarks[0] # get first face recognized
+        face_landmarks = results.multi_face_landmarks[0]  # get first face recognized
         features = np.array([[lmk.x, lmk.y, lmk.z] for lmk in face_landmarks.landmark])
         return features
     return np.array([])
 
-def extract_features_v2(frame:cv2.typing.MatLike):
+
+def extract_features_v2(frame: cv2.typing.MatLike):
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
     detection_result = detector.detect(mp_image)
     return detection_result
 
+
 def feature_normalization(features):
     return features / get_distance_between_eyes(features)
 
-def get_movement_from_features(features_window, points_of_interest):
-    delta_x = features_window[:, points_of_interest, 0].max(axis=0) - features_window[:,points_of_interest,0].min(axis=0)
-    delta_y = features_window[:, points_of_interest, 1].max(axis=0) - features_window[:,points_of_interest,1].min(axis=0)
-    delta_z = features_window[:, points_of_interest, 2].max(axis=0) - features_window[:,points_of_interest,2].min(axis=0)
-    return math.sqrt( (delta_x**2).sum() + (delta_y**2).sum() + (delta_z**2).sum())
 
+def get_movement_from_features(features_window, points_of_interest):
+    delta_x = features_window[:, points_of_interest, 0].max(axis=0) - features_window[:, points_of_interest, 0].min(axis=0)
+    delta_y = features_window[:, points_of_interest, 1].max(axis=0) - features_window[:, points_of_interest, 1].min(axis=0)
+    delta_z = features_window[:, points_of_interest, 2].max(axis=0) - features_window[:, points_of_interest, 2].min(axis=0)
+    return math.sqrt((delta_x ** 2).sum() + (delta_y ** 2).sum() + (delta_z ** 2).sum())
