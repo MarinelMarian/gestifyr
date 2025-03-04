@@ -6,7 +6,7 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 import cv2
 from collections import deque
-from mediapipe_extract import extract_features_v2, get_distance_between_corner_eyes
+from mediapipe_extract import extract_features_v2
 from tools import clear_terminal
 import json
 import numpy as np
@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 BASE_PATH = os.getenv("BASE_PATH")
+APP_REL_PATH = os.getenv("APP_REL_PATH")
 
 # ----- user params --------
 queue_frame_size_sec = (
@@ -44,7 +45,7 @@ clear_terminal()
 
 # Model parameters
 metadata_filename = (
-    f"{BASE_PATH}tudor/model/processed_trimmed/gru_1741016164/info_model.txt"
+    f"{BASE_PATH}{APP_REL_PATH}model/processed_trimmed/gru_1741016164/info_model.txt"
 )
 with open(metadata_filename, "r") as file:
     data = json.load(file)

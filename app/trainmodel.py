@@ -24,7 +24,7 @@ epochs = 1000
 
 epochThresh = 0.1
 # ---------------------
-modelInputs = { 'filePath':['tudor/samples2/processed_trimmed'], # list of folders
+modelInputs = { 'filePath':['app/samples2/processed_trimmed'], # list of folders
                'hiddenSize':[16, 32, 64, 128, 256, 512],
                'numLayers' : [2, 3, 4],
                'epochThresh' :[0.5, 0.1, 0.05]
@@ -82,10 +82,10 @@ def calculateModel(**kwargs):
     outputFolder = kwargs["filePath"].split('/')[-1]
 
     modelName = f'gru_{int(dt.datetime.now().timestamp())}'
-    os.makedirs(f'tudor/model/{outputFolder}/{modelName}', exist_ok=True)
-    saveModelFileName = f"tudor/model/{outputFolder}/{modelName}/gru_model.pth"
-    saveScalerFileName = f"tudor/model/{outputFolder}/{modelName}/scaler.pkl"
-    modelMetadataFile = f"tudor/model/{outputFolder}/{modelName}/info_model.txt"
+    os.makedirs(f'app/model/{outputFolder}/{modelName}', exist_ok=True)
+    saveModelFileName = f"app/model/{outputFolder}/{modelName}/gru_model.pth"
+    saveScalerFileName = f"app/model/{outputFolder}/{modelName}/scaler.pkl"
+    modelMetadataFile = f"app/model/{outputFolder}/{modelName}/info_model.txt"
     train_files = glob.glob(f'{kwargs["filePath"]}/*.csv')
     labels = sorted(set(os.path.basename(f).split('_')[1] for f in train_files))
     print(f'Labels found: {labels}')

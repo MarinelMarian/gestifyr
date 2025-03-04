@@ -1,6 +1,6 @@
 {
-    "modelFile": "tudor/model/raw/gru_1740428350/gru_model.pth",
-    "scalerFile": "tudor/model/raw/gru_1740428350/scaler.pkl",
+    "modelFile": "app/model/raw/gru_1740428350/gru_model.pth",
+    "scalerFile": "app/model/raw/gru_1740428350/scaler.pkl",
     "hidden_size": 64,
     "num_layers": 2,
     "labels": [

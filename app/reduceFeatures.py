@@ -9,10 +9,10 @@ import cv2
 t.clear_terminal()
 # Define input and output folders
 input_folder = (
-    "tudor/forTesting/processed"  # Change to your folder containing CSV files
+    "app/forTesting/processed"  # Change to your folder containing CSV files
 )
-input_folder_raw = "tudor/forTesting/raw"
-output_folder = "tudor/forTesting/processed_trimmed"  # Folder to save processed files
+input_folder_raw = "app/forTesting/raw"
+output_folder = "app/forTesting/processed_trimmed"  # Folder to save processed files
 
 # Ensure output folder exists
 os.makedirs(output_folder, exist_ok=True)

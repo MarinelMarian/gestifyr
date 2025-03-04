@@ -56,7 +56,7 @@ clear_terminal()
 # ----- init params --------
 
 # Model parameters
-metadataFilename = "tudor/model/raw_normalized/gru_1740425783/info_model.txt"
+metadataFilename = "app/model/raw_normalized/gru_1740425783/info_model.txt"
 with open(metadataFilename, "r") as file:
     data = json.load(file)
 input_size = data["input_size"]  # Feature size 478 points of x,y,z
@@ -153,7 +153,7 @@ while not shouldExit:
 
 
 # #load data
-# test_file = "tudor/processed/gesture_7__1739197934.csv"
+# test_file = "app/processed/gesture_7__1739197934.csv"
 # df = pd.read_csv(test_file, skiprows=1)  # Ignore first row
 # features2test = torch.tensor(scaler.transform(df.values), dtype=torch.float32).unsqueeze(0)
 

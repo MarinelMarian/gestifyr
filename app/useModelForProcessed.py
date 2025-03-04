@@ -33,7 +33,7 @@ frameQueue = deque(maxlen=queueFrameSize)
 # ~~~~~~~~~~~~~~~~~~
 
 # ====== mediapipe init =========
-base_options = python.BaseOptions(model_asset_path='tudor/face_landmarker_v2_with_blendshapes.task')
+base_options = python.BaseOptions(model_asset_path='app/face_landmarker_v2_with_blendshapes.task')
 options = vision.FaceLandmarkerOptions(base_options=base_options,
                                        output_face_blendshapes=True,
                                        output_facial_transformation_matrixes=True,
@@ -50,7 +50,7 @@ def extractFeaturesv2(frame:cv2.typing.MatLike):
 # Code added by Zsolt
 
 ## PREDICTION
-trained_model_file_path = "tudor/trained_model_OK15_e1484_p93__1740582936.pth"
+trained_model_file_path = "app/trained_model_OK15_e1484_p93__1740582936.pth"
 
 # Define RNN Model
 class RNNModel(nn.Module):
