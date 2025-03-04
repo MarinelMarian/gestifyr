@@ -15,12 +15,12 @@ def clear_terminal():
         _ = system("clear")
 
 
-def show_points_of_interest(frame, allFeatures, pointsOfInterest):
+def show_points_of_interest(frame, all_features, points_of_interest):
     h, w, _ = frame.shape
-    for p in pointsOfInterest:
+    for p in points_of_interest:
         cv2.circle(
             frame,
-            (int(allFeatures[p, 0] * w), int(allFeatures[p, 1] * h)),
+            (int(all_features[p, 0] * w), int(all_features[p, 1] * h)),
             10,
             (0, 255, 0),
             3,
@@ -30,11 +30,11 @@ def show_points_of_interest(frame, allFeatures, pointsOfInterest):
     cv2.waitKey(5)
 
 
-def write_to_csv(fileName, data):
+def write_to_csv(file_name, data):
     # Ensure the directory exists
-    os.makedirs(os.path.dirname(fileName), exist_ok=True)
-    with open(fileName, "w", newline="") as file:
+    os.makedirs(os.path.dirname(file_name), exist_ok=True)
+    with open(file_name, "w", newline="") as file:
         writer = csv.writer(file)
         writer.writerows(data)
 
-    print(f"CSV file {fileName} has been written successfully.")
+    print(f"CSV file {file_name} has been written successfully.")
