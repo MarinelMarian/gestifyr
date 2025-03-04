@@ -1,0 +1,15 @@
+{
+    "model_file": "app/model/processed_trimmed/gru_64_3_0.1_5/gru_model.pth",
+    "scaler_file": "app/model/processed_trimmed/gru_64_3_0.1_5/scaler.pkl",
+    "hidden_size": 64,
+    "num_layers": 3,
+    "labels": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+    ],
+    "input_size": 9,
+    "output_size": 5
+}
