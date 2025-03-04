@@ -1,10 +1,10 @@
-app/__pycache__/
-app/movies
-
 .DS_Store
 .env
 **/.vscode/
 myenv/
+
+app/__pycache__/
+app/movies
 
 tudor/movies
 tudor/__pycache__/
