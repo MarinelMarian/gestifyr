@@ -121,3 +121,50 @@ def get_angles(result_features, img_w=1980, img_h=1080):
     y = angles[1] * 360
     z = angles[2] * 360
     return x, y
+
+
+def overlayBar( frame, **kwargs):
+    position_idx = kwargs['position_idx']
+    value = kwargs['value']
+    icon_image = kwargs['icon_image']
+    thresh = kwargs['threshold']
+    # Resize the icon if needed
+    icon_size = 60  # Adjust this for desired size
+    bar_width = 200
+    bar_height = 60
+    icon_image = cv2.resize(icon_image, (icon_size, icon_size))
+    # Get frame dimensions
+    height, width, _ = frame.shape
+
+    # Define positions
+    
+    bar_x = width - bar_width - 60  # Move left to fit icon
+    bar_y = 100 + (bar_height +30) * position_idx 
+
+    # Icon position
+    icon_x = bar_x - icon_size - 10  # Shift left of progress bar
+    icon_y = bar_y  # Align with progress bar
+
+    # Background box for overlay (Larger size)
+    bg_x1, bg_y1 = icon_x - 10, bar_y - 15  # Top-left corner
+    bg_x2, bg_y2 = bar_x + bar_width + 20, bar_y + bar_height + 15  # Bottom-right corner
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (bg_x1, bg_y1), (bg_x2, bg_y2), (50, 50, 50), -1)
+    frame = cv2.addWeighted(overlay, 0.5, frame, 0.5, 0)  # Blend with transparency
+    
+    # Overlay PNG icon (handling transparency)
+    icon_h, icon_w, icon_c = icon_image.shape
+    if icon_c == 4:  # Check if image has an alpha channel
+        for c in range(0, 3):  # Loop over BGR channels
+            frame[icon_y:icon_y + icon_h, icon_x:icon_x + icon_w, c] = (
+                frame[icon_y:icon_y + icon_h, icon_x:icon_x + icon_w, c] * (1 - icon_image[:, :, 3] / 255.0) +
+                icon_image[:, :, c] * (icon_image[:, :, 3] / 255.0)
+            )
+    # Draw progress bar background
+    cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height), (80, 80, 80), -1)
+
+    # Draw progress bar foreground
+    fill_width = int(value * bar_width)
+    fill_color = (0, 255, 0) if value>thresh else (33, 222, 255)
+    cv2.rectangle(frame, (bar_x, bar_y), (bar_x + fill_width, bar_y + bar_height), fill_color, -1)
+    return frame
