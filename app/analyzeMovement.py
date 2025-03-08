@@ -15,8 +15,8 @@ APP_REL_PATH = os.getenv("APP_REL_PATH")
 clear_terminal()
 
 # ------ Input data ---------
-movement_file = f"{BASE_PATH}{APP_REL_PATH}/movies/gest1-4.csv"
-samples_folder = f"{BASE_PATH}{APP_REL_PATH}/samples3/"
+movement_file = f"{BASE_PATH}{APP_REL_PATH}/movies/WIN_20250305_18_57_37_Pro.csv"
+samples_folder = f"{BASE_PATH}{APP_REL_PATH}/movies/gestures/"
 # -------------------
 
 
@@ -110,7 +110,7 @@ fig.canvas.mpl_connect("motion_notify_event", on_mouse_move)
 fig.canvas.mpl_connect("key_press_event", on_key_press)  # Key press
 
 feature_values = np.array(data)
-for i in range(1, len(header_names)):
+for i in range(0, len(header_names)):
     ax.plot(feature_values[:, i], label=header_names[i])
 
 line_start = ax.axvline(
