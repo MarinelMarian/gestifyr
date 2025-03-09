@@ -1,51 +1,42 @@
-Please help me write a program in record_samples.py, which plays continuously a webcam stream. At the same time I have a collection of head/face gestures mapped to this list [nod, shake, mouth_open, eyebrows_raise, long_blink, smile, none].
-The purpose of the program is: while the webcam stream plays, we show an overlay at the bottom with a play/pause button that toggles by pressing space bar. When play is visible it means the state is_paused = True and when Pause is visible is_paused = False. When in state is_paused = False, we display the name of the current_gesture on screen. We cycle through the list (round and round) showing the current_gesture name for 3 seconds (a configurable amount to give the user a chance to perform the gesture) we also show a thin progress bar at the top center that shows how much time elapsed from the 3 seconds. After that we hide the current_gesture name for 2 seconds (a configurable amount to wait for the next gesture), and then we move on to the next gesture. While we show the current gesture we want to record the video associated with it.
-When we press "p", the webcam stream plays and we enter in playback mode state is_playback = True.
-While in playback mode we want to start by running on all recordings the portion of the parseVideo.py that generates the csv with the selected features. After that we show a 100px high timeline with each video segment on that timeline. Adjacent to the timeline (at the bottom) will have a plot of the features we monitor by running the portion of the analyzeMovement.py that plots a graph. We show with a semi-transparent blue tint, the first gesture portion and if we press "space", we get to see in a separate preview window the video specific to that portion. With arrows left and right we can switch back and forth between gestures on the timeline. While a gesture is selected if we press arrow down we decide to save that gesture in the samples and keep visible a small green checkbox on top of the timeline portion.
-When we press "q" for all the all the gestures selected for save we build a file name pattern of gesture_<index of gesture>_<int gesture timestamp>, then in a folder called csv_samples we save the corresponding gesture csv files, and in a  separate folder called video_samples, we store the video portions corresponding to those same gestures.
+Overall Prompt: >
+  Please help me write a program in record_samples.py, which plays continuously a webcam stream. At the same time I have a collection of head/face gestures mapped to this list [nod, shake, mouth_open, eyebrows_raise, long_blink, smile, none].
+  The purpose of the program is: while the webcam stream plays, we show an overlay at the bottom with a play/pause button that toggles by pressing space bar. When play is visible it means the state is_paused = True and when Pause is visible is_paused = False. When in state is_paused = False, we display the name of the current_gesture on screen. We cycle through the list (round and round) showing the current_gesture name for 3 seconds (a configurable amount to give the user a chance to perform the gesture) we also show a thin progress bar at the top center that shows how much time elapsed from the 3 seconds. After that we hide the current_gesture name for 2 seconds (a configurable amount to wait for the next gesture), and then we move on to the next gesture. While we show the current gesture we want to record the video associated with it.
+  When we press "p", the webcam stream plays and we enter in playback mode state is_playback = True.
+  While in playback mode we want to start by running on all recordings the portion of the parseVideo.py that generates the csv with the selected features. After that we show a 100px high timeline with each video segment on that timeline. Adjacent to the timeline (at the bottom) will have a plot of the features we monitor by running the portion of the analyzeMovement.py that plots a graph. We show with a semi-transparent blue tint, the first gesture portion and if we press "space", we get to see in a separate preview window the video specific to that portion. With arrows left and right we can switch back and forth between gestures on the timeline. While a gesture is selected if we press arrow down we decide to save that gesture in the samples and keep visible a small green checkbox on top of the timeline portion.
+  When we press "q" for all the all the gestures selected for save we build a file name pattern of gesture_<index of gesture>_<int gesture timestamp>, then in a folder called csv_samples we save the corresponding gesture csv files, and in a  separate folder called video_samples, we store the video portions corresponding to those same gestures.
 
 #############################################
 
-Below is one way to break down the overall prompt into a series of smaller, more manageable prompts:
+# Below is one way to break down the overall prompt into a series of smaller, more manageable prompts
 
-# Webcam Stream and Overlay
-Prompt:
-"Help me write a program in record_samples.py that continuously plays a webcam stream. Add an overlay at the bottom with a play/pause button that toggles using the space bar. When the overlay shows 'Play', set is_paused = True, and when it shows 'Pause', set is_paused = False."
+Webcam Stream and Overlay: >
+  Help me write a program in record_samples.py that continuously plays a webcam stream. Add an overlay at the bottom with a play/pause button that toggles using the space bar. When the overlay shows 'Play', set is_paused = True, and when it shows 'Pause', set is_paused = False.
 
-# Gesture Cycling with Progress Bar
-Prompt:
-"Extend the program so that when is_paused = False, it cycles through a predefined list of gestures: [nod, shake, mouth_open, eyebrows_raise, long_blink, smile, none]. For each gesture, display its name on screen for 3 seconds (a configurable duration) along with a thin progress bar at the top center showing the elapsed time of those 3 seconds."
+Gesture Cycling with Progress Bar: >
+  Extend the program so that when is_paused = False, it cycles through a predefined list of gestures: [nod, shake, mouth_open, eyebrows_raise, long_blink, smile, none]. For each gesture, display its name on screen for 3 seconds (a configurable duration) along with a thin progress bar at the top center showing the elapsed time of those 3 seconds."
 
-# Video Recording and Play/Pause Symbols
-Prompt:
-"Modify the program so that while a gesture is displayed, the video segment corresponding to that gesture gets recorded as an mp4 file. Make sure you use cv2.VideoWriter_fourcc(*'mp42'). The filename pattern to use should be: gesture_<gesture index><gesture frames count><timestamp in the format %Y-%m-%d_%H-%M-%S>.mp4. Also instead of the word Play, display '>' and for Pause use '||' symbols. The font scaling for '>' should be 2 while for '||' should be the normal 1."
+Video Recording and Play/Pause Symbols: >
+  Modify the program so that while a gesture is displayed, the video segment corresponding to that gesture gets recorded as an mp4 file. Make sure you use cv2.VideoWriter_fourcc(*'mp42'). The filename pattern to use should be: gesture_<gesture index><gesture frames count><timestamp in the format %Y-%m-%d_%H-%M-%S>.mp4. Also instead of the word Play, display '>' and for Pause use '||' symbols. The font scaling for '>' should be 2 while for '||' should be the normal 1.
 
-# Playback Mode Initialization
-Prompt:
-"Add a playback mode that toggles when the 'p' key is pressed (setting is_playback = True). In this mode, analyze each gesture video file and generate the CSV files with selected features, using this pattern: <video filename except the extension>.csv. For inspiration on how to do that have a look at parseVideo.py which knows how to process one recorded video file and generates a csv. In record_sample.py, please create a function that does this processing of the video file and the generation of the csv file."
+Playback Mode Initialization: >
+  Add a playback mode that toggles when the 'p' key is pressed (setting is_playback = True). In this mode, analyze each gesture video file and generate the CSV files with selected features, using this pattern: <video filename except the extension>.csv. For inspiration on how to do that have a look at parseVideo.py which knows how to process one recorded video file and generates a csv. In record_sample.py, please create a function that does this processing of the video file and the generation of the csv file.
 
-# Timeline and Feature Plot Display
-Prompt:
-"After all gesture videos have been processed, maximize the app window. Inside the window display a 100px high timeline that shows as an image, the first frame of each recorded video segment. Next to the timeline (at the bottom), show a plot of all the monitored features. For inspiration on how to do it use the code in analyzeMovement.py. In record_sample.py, please create a function that does this plot parallel and aligned to the timeline of all video files."
+Timeline and Feature Plot Display: >
+  After all gesture videos have been processed, maximize the app window. Inside the window display a 100px high timeline that shows as an image, the first frame of each recorded video segment. Next to the timeline (at the bottom), show a plot of all the monitored features. For inspiration on how to do it use the code in analyzeMovement.py. In record_sample.py, please create a function that does this plot parallel and aligned to the timeline of all video files.
 
-# More plot display options
-Prompt:
-"The names of the gestures and the frame in the timeline look pixelated. Keep the frame in the timeline resized to 100px height and fill the space between frames (if any) with grey. Also make sure the left margin of every frame aligns with the start of the corresponding plotted data in the timeline. Add very thin grey line delimiters that span over the timeline and the plot, where each delimiter is positioned at the left margin of each frame."
+More plot display options: >
+  The names of the gestures and the frame in the timeline look pixelated. Keep the frame in the timeline resized to 100px height and fill the space between frames (if any) with grey. Also make sure the left margin of every frame aligns with the start of the corresponding plotted data in the timeline. Add very thin grey line delimiters that span over the timeline and the plot, where each delimiter is positioned at the left margin of each frame."
 
-# More timeline display options
-Prompt:
-"instead of resizing the composite do a padding with grey background until you fill in the target width"
+More timeline display options: >
+  instead of resizing the composite do a padding with grey background until you fill in the target width
 
-Gesture Preview Navigation
-Prompt:
-"Enhance playback mode so that the first gesture segment is highlighted with a semi-transparent blue tint. When the space bar is pressed, open a separate preview window that displays the video for that particular gesture segment. Allow navigation between gesture segments using the left and right arrow keys."
+Gesture Preview Navigation: >
+  Enhance playback mode so that the first gesture segment is highlighted with a semi-transparent blue tint. When the space bar is pressed, open a separate preview window that displays the video for that particular gesture segment. Allow navigation between gesture segments using the left and right arrow keys.
 
-Gesture Selection for Saving
-Prompt:
-"Allow the user to select a gesture on the timeline for saving: if a gesture is selected, pressing the down arrow should mark it as saved by displaying a small green checkbox on top of that timeline segment."
+Gesture Selection for Saving: >
+  Allow the user to select a gesture on the timeline for saving: if a gesture is selected, pressing the down arrow should mark it as saved by displaying a small green checkbox on top of that timeline segment.
 
-Saving Selected Gestures
-Prompt:
-"Finally, implement the saving logic: upon pressing 'q', for all the gestures marked for saving, build filenames using the pattern gesture_<index>_<timestamp>. Save the corresponding CSV files to a folder called 'csv_samples' and the associated video segments to a folder called 'video_samples'."
+Saving Selected Gestures: >
+  Finally, implement the saving logic: upon pressing 'q', for all the gestures marked for saving, build filenames using the pattern gesture_<index>_<timestamp>. Save the corresponding CSV files to a folder called 'csv_samples' and the associated video segments to a folder called 'video_samples'.
 
-Each of these prompts represents a step toward building the complete application gradually.
+# Each of these prompts represents a step toward building the complete application gradually.

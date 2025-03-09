@@ -220,6 +220,7 @@ def show_timeline_and_features():
     boundaries = []   # left boundary x positions (in pixels)
     cumulative = 0
     total_video_frames = sum(frames for (_, frames, _) in composite_info)
+    timeline_total_width = max(timeline_total_width, total_video_frames)
     for composite, frames, gesture_label in composite_info:
         # Compute target width proportional to video frame count.
         target_width = int((frames / total_video_frames) * timeline_total_width)
