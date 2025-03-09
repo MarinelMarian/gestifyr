@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 BASE_PATH = os.getenv("BASE_PATH")
 APP_REL_PATH = os.getenv("APP_REL_PATH")
+WEBCAM_INDEX = int(os.getenv("WEBCAM_INDEX")) or 0
 
 # Set current working directory to the app folder
 os.chdir(BASE_PATH + APP_REL_PATH)
@@ -52,7 +53,7 @@ gesture_phase = "display"  # "display" or "wait"
 gesture_phase_start = time.time()
 
 # Initialize webcam
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(WEBCAM_INDEX)
 if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
