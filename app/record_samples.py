@@ -6,6 +6,7 @@ import os
 import time
 import matplotlib.pyplot as plt
 import csv
+from PIL import ImageFont, ImageDraw, Image
 
 from videoProcessingTools import get_angles
 from mediapipe_extract import extract_features_v2
@@ -153,7 +154,7 @@ def show_timeline_and_features():
     text_color = (0, 0, 0)   # black text
 
     # Lists to store composite image info and CSV features.
-    composite_info = []  # Each entry: (composite image, video_frame_count)
+    composite_info = []  # Each entry: (composite image, video_frame_count, gesture_label)
     csv_info = []        # Each entry: (header, data_rows)
 
     # Process video files in output_dir (sorted order).
@@ -328,6 +329,42 @@ def show_timeline_and_features():
     plt.tight_layout()
     plt.show()
 
+
+
+def draw_play_pause_symbol(frame, is_paused):
+    """
+    Draws the play/pause symbol on the provided frame using the arial.ttf font.
+    - When is_paused is True, display the play symbol (▶) or this (⏵) or ►.
+    - When is_paused is False, display the pause symbol (⏸) or this (⏸) or ‖.
+    """
+    # Convert BGR frame to RGB PIL image.
+    pil_im = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(pil_im)
+    
+    # Choose symbol and font properties.
+    symbol = "►" if is_paused else "‖"
+    font_size = 40  # adjust as needed
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except IOError:
+        font = ImageFont.load_default()
+    
+    # Use font.getbbox() to compute text width and height.
+    bbox = font.getbbox(symbol)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1] + font_size // 2  # adjust for better centering
+    
+    h, w = frame.shape[:2]
+    overlay_height = 50  # same as your overlay height
+    x = (w - text_w) // 2
+    y = h - overlay_height + (overlay_height - text_h) // 2
+
+    # Draw the symbol with white color.
+    draw.text((x, y), symbol, font=font, fill=(255, 255, 255))
+    
+    # Convert back to OpenCV BGR image.
+    return cv2.cvtColor(np.array(pil_im), cv2.COLOR_RGB2BGR)
+
 # Main loop
 while True:
     ret, frame = cap.read()
@@ -443,22 +480,8 @@ while True:
     alpha = 0.6
     frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
 
-    # Display symbol: using ">" for play and "||" for pause.
-    button_symbol = ">" if is_paused else "||"
-    font_scale_disp = 1.5 if is_paused else 1
-    thickness_disp = 3
-    text_size, _ = cv2.getTextSize(button_symbol, font, font_scale_disp, thickness_disp)
-    text_x = (frame_width - text_size[0]) // 2
-    text_y = overlay_y + (overlay_height + text_size[1]) // 2
-    cv2.putText(
-        frame,
-        button_symbol,
-        (text_x, text_y),
-        font,
-        font_scale_disp,
-        (255, 255, 255),
-        thickness_disp,
-    )
+    # After drawing the overlay, replace the play/pause symbol with a PIL-rendered version.
+    frame = draw_play_pause_symbol(frame, is_paused)
 
     # Display current gesture for debugging.
     cv2.putText(
