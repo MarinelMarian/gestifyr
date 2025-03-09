@@ -32,9 +32,9 @@ except AttributeError:
 GESTURES = [
     "Nod",
     "Shake",
-    "Mouth open",
-    "Eyebrows raise",
-    "Eyes blink long",
+    "Mouth",
+    "Eyebrows",
+    "Blink",
     "Smile",
     "None",
 ]
@@ -158,13 +158,7 @@ def show_timeline_and_features():
     csv_info = []        # Each entry: (header, data_rows)
 
     # Process video files in output_dir (sorted order).
-    video_files = sorted(
-        [
-            f
-            for f in os.listdir(output_dir)
-            if f.startswith("gesture_") and f.endswith(".mp4")
-        ]
-    )
+    video_files = get_sorted_video_file_list(output_dir)
     for f in video_files:
         video_path = os.path.join(output_dir, f)
         cap_vid = cv2.VideoCapture(video_path)
@@ -216,7 +210,7 @@ def show_timeline_and_features():
                 print(f"Error processing {csv_path}: {e}")
 
     # Build timeline image.
-    timeline_total_width = 1000  # overall desired width
+    timeline_total_width = 100  # overall desired width
     timeline_parts = []
     boundaries = []   # left boundary x positions (in pixels)
     cumulative = 0
@@ -334,8 +328,8 @@ def show_timeline_and_features():
 def draw_play_pause_symbol(frame, is_paused):
     """
     Draws the play/pause symbol on the provided frame using the arial.ttf font.
-    - When is_paused is True, display the play symbol (▶) or this (⏵) or ►.
-    - When is_paused is False, display the pause symbol (⏸) or this (⏸) or ‖.
+    - When is_paused is True, display the play symbol (►).
+    - When is_paused is False, display the pause symbol (‖).
     """
     # Convert BGR frame to RGB PIL image.
     pil_im = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
@@ -349,7 +343,6 @@ def draw_play_pause_symbol(frame, is_paused):
     except IOError:
         font = ImageFont.load_default()
     
-    # Use font.getbbox() to compute text width and height.
     bbox = font.getbbox(symbol)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1] + font_size // 2  # adjust for better centering
@@ -365,7 +358,15 @@ def draw_play_pause_symbol(frame, is_paused):
     # Convert back to OpenCV BGR image.
     return cv2.cvtColor(np.array(pil_im), cv2.COLOR_RGB2BGR)
 
+def get_sort_key(f):
+    parts = f.rsplit('_', 2)
+    key = (parts[1] + "_" + parts[2].split('.')[0], f)
+    return key
+
 # Main loop
+def get_sorted_video_file_list(output_dir, get_sort_key_func=get_sort_key):
+    return sorted([f for f in os.listdir(output_dir) if f.endswith(".mp4")], key=get_sort_key_func)
+
 while True:
     ret, frame = cap.read()
     # Flip frame horizontally for a mirror effect.
@@ -510,7 +511,8 @@ while True:
         if is_playback:
             print("Paused.")
             print("Entering Playback Mode...")
-            for f in os.listdir(output_dir):
+            file_list = get_sorted_video_file_list(output_dir)
+            for f in file_list:
                 if f.startswith("gesture_") and f.endswith(".mp4"):
                     video_path = os.path.join(output_dir, f)
                     csv_path = os.path.splitext(video_path)[0] + ".csv"
