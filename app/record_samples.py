@@ -5,6 +5,7 @@ import datetime as dt
 import os
 import time
 import matplotlib.pyplot as plt
+import csv
 
 from videoProcessingTools import get_angles
 from mediapipe_extract import extract_features_v2
@@ -51,7 +52,7 @@ gesture_phase = "display"  # "display" or "wait"
 gesture_phase_start = time.time()
 
 # Initialize webcam
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
@@ -118,7 +119,7 @@ def process_video_file(video_path):
         raw_array_row = raw_array.reshape(-1)
         # Get angles
         x, y = get_angles(raw_array_row, img_w, img_h)
-        all_features.append([y, x, *reduced_features_row])
+        all_features.append([y / 90, x / 90, *reduced_features_row])
         frame_nr += 1
 
     cap_vid.release()
@@ -140,6 +141,174 @@ def process_video_file(video_path):
     print(f"Processed {video_path}\nSaved CSV: {csv_filename}")
 
 
+def show_timeline_and_features():
+    import cv2, numpy as np, os, csv, matplotlib.pyplot as plt
+
+    # Parameters for timeline images.
+    target_img_height = 66  # fixed image height
+    header_height = 20  # header space for gesture name
+    composite_height = header_height + target_img_height
+    font_face = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.5
+    thickness = 1
+    text_color = (0, 0, 0)  # black text
+
+    # Lists to store composite image info and CSV features.
+    composite_info = []  # Each entry: (composite image, video_frame_count)
+    csv_info = []  # Each entry: (header, data_rows)
+
+    # Process video files in output_dir (sorted order).
+    video_files = sorted(
+        [
+            f
+            for f in os.listdir(output_dir)
+            if f.startswith("gesture_") and f.endswith(".mp4")
+        ]
+    )
+    for f in video_files:
+        video_path = os.path.join(output_dir, f)
+        cap_vid = cv2.VideoCapture(video_path)
+        if not cap_vid.isOpened():
+            continue
+        total_frames = int(cap_vid.get(cv2.CAP_PROP_FRAME_COUNT))
+        mid_frame_index = total_frames // 2
+        cap_vid.set(cv2.CAP_PROP_POS_FRAMES, mid_frame_index)
+        ret, frame = cap_vid.read()
+        cap_vid.release()
+        if ret:
+            # Resize frame to fixed target_img_height.
+            h, w = frame.shape[:2]
+            scale = target_img_height / h
+            new_w = int(w * scale)
+            resized_frame = cv2.resize(frame, (new_w, target_img_height))
+            # Create composite image: header on top and resized frame below.
+            composite = np.full((composite_height, new_w, 3), 255, dtype=np.uint8)
+            # Determine gesture name from filename.
+            base = os.path.basename(video_path)
+            parts = base.split("_")
+            if len(parts) >= 2:
+                try:
+                    gesture_index = int(parts[1])
+                    gesture_label = GESTURES[gesture_index]
+                except Exception:
+                    gesture_label = "Unknown"
+            else:
+                gesture_label = "Unknown"
+            # Center gesture name in header.
+            (text_w, text_h), _ = cv2.getTextSize(
+                gesture_label, font_face, font_scale, thickness
+            )
+            text_x = (new_w - text_w) // 2
+            text_y = (header_height + text_h) // 2
+            cv2.putText(
+                composite,
+                gesture_label,
+                (text_x, text_y),
+                font_face,
+                font_scale,
+                text_color,
+                thickness,
+            )
+            # Place the resized frame below the header.
+            composite[header_height:composite_height, 0:new_w, :] = resized_frame
+            composite_info.append((composite, total_frames))
+        # Process corresponding CSV file.
+        csv_path = os.path.splitext(video_path)[0] + ".csv"
+        if os.path.exists(csv_path):
+            try:
+                with open(csv_path, "r") as f_csv:
+                    reader = csv.reader(f_csv)
+                    rows = list(reader)
+                    # Skip if CSV has no data rows.
+                    if len(rows) < 2:
+                        continue
+                    data_rows = []
+                    for row in rows[1:]:
+                        if row:
+                            data_rows.append([float(val) for val in row])
+                    csv_info.append((rows[0], data_rows))
+            except Exception as e:
+                print(f"Error processing {csv_path}: {e}")
+
+    # Build timeline image.
+    # Sum total frames of all videos.
+    total_video_frames = sum(frames for (_, frames) in composite_info)
+    # Set desired overall timeline width (in pixels).
+    timeline_total_width = 1000
+    timeline_parts = []
+    for composite, frames in composite_info:
+        # Resize each composite image horizontally in proportion to its video frame count.
+        target_width = int((frames / total_video_frames) * timeline_total_width)
+        composite_resized = cv2.resize(composite, (target_width, composite_height))
+        timeline_parts.append(composite_resized)
+    if timeline_parts:
+        timeline = np.hstack(timeline_parts)
+    else:
+        timeline = None
+
+    # Aggregate feature data from CSV files in sorted order.
+    all_features = []
+    header = None
+    total_feature_frames = 0
+    for csv_header, data_rows in csv_info:
+        all_features.extend(data_rows)
+        total_feature_frames += len(data_rows)
+        if header is None:
+            header = csv_header
+    all_features = np.array(all_features) if all_features else None
+
+    # Scale x-axis for features so that total time equals timeline_total_width.
+    factor = timeline_total_width / total_feature_frames if total_feature_frames else 1
+    x_vals_scaled = (
+        [x * factor for x in range(total_feature_frames)]
+        if total_feature_frames
+        else []
+    )
+
+    # Create figure and maximize window (Windows-specific).
+    fig, (ax1, ax2) = plt.subplots(
+        2, 1, gridspec_kw={"height_ratios": [1, 2]}, figsize=(14, 8)
+    )
+    mng = plt.get_current_fig_manager()
+    try:
+        mng.window.state("zoomed")
+    except Exception:
+        mng.resize(1400, 1000)
+
+    # Plot timeline (top axes):
+    if timeline is not None:
+        # Use extent so that the timeline image covers x from 0 to timeline_total_width.
+        timeline_rgb = cv2.cvtColor(timeline, cv2.COLOR_BGR2RGB)
+        ax1.imshow(timeline_rgb, extent=[0, timeline_total_width, 0, composite_height])
+        ax1.set_xlim([0, timeline_total_width])
+        ax1.axis("off")
+        ax1.set_title("Timeline of Recorded Gestures")
+    else:
+        ax1.text(0.5, 0.5, "No timeline available", ha="center", va="center")
+        ax1.axis("off")
+
+    # Plot monitored features (bottom axes) using the scaled x-values.
+    if all_features is not None:
+        num_features = all_features.shape[1]
+        for i in range(num_features):
+            ax2.plot(
+                x_vals_scaled,
+                all_features[:, i],
+                label=header[i] if header is not None else f"F{i}",
+            )
+        ax2.set_xlabel("Time (scaled to timeline)")
+        ax2.set_title("Monitored Features")
+        ax2.legend(loc="lower right")
+        ax2.set_xlim(0, timeline_total_width)
+    else:
+        ax2.text(0.5, 0.5, "No feature data available", ha="center", va="center")
+        ax2.axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+
+# Main loop
 while True:
     ret, frame = cap.read()
     # Flip frame horizontally for a mirror effect.
@@ -292,17 +461,23 @@ while True:
             gesture_phase_start = time.time()
         print("Paused." if is_paused else "Resumed.")
     elif key == ord("p"):
-        is_paused = True
-        print("Paused.")
         # Enter playback mode. In playback mode, process each gesture video file.
-        is_playback = True
-        print("Entering Playback Mode...")
-        for f in os.listdir(output_dir):
-            if f.startswith("gesture_") and f.endswith(".mp4"):
-                video_path = os.path.join(output_dir, f)
-                process_video_file(video_path)
-        print("Finished processing all gesture videos. Exiting Playback Mode.")
-        is_playback = False
+        is_playback = not is_playback
+        is_paused = True
+        if is_playback:
+            print("Paused.")
+            print("Entering Playback Mode...")
+            for f in os.listdir(output_dir):
+                if f.startswith("gesture_") and f.endswith(".mp4"):
+                    video_path = os.path.join(output_dir, f)
+                    csv_path = os.path.splitext(video_path)[0] + ".csv"
+                    if not os.path.exists(csv_path):
+                        process_video_file(video_path)
+            print("Finished processing all gesture videos. Exiting Playback Mode.")
+
+            # After processing, display timeline and feature plot.
+            show_timeline_and_features()
+
     elif key == ord("q"):
         break
 
