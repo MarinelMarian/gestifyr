@@ -143,14 +143,12 @@ def process_video_file(video_path):
 
 
 def show_timeline_and_features():
-    import cv2, numpy as np, os, csv, matplotlib.pyplot as plt
-
     # Parameters for timeline images.
-    target_img_height = 66  # fixed image height
-    header_height = 20  # header space for gesture name
+    target_img_height = 100  # fixed image height
+    header_height = 10  # header space for gesture name
     composite_height = header_height + target_img_height
     font_face = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.5
+    font_scale = 0.33
     thickness = 1
     text_color = (0, 0, 0)  # black text
 
@@ -479,7 +477,7 @@ while True:
             # After processing, display timeline and feature plot.
             show_timeline_and_features()
 
-    elif key == ord("q"):
+    elif key == ord("q") or key == 27:  # 'q' or ESC to quit
         break
 
 # Clean up

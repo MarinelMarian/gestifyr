@@ -117,7 +117,7 @@ def get_angles(result_features, img_w=1980, img_h=1080):
     angles, mtxR, mtxQ, Qx, Qy, Qz = cv2.RQDecomp3x3(rotational_matrix)
 
     # Get the y rotation degree
-    x = angles[0] * 360
-    y = angles[1] * 360
+    y = angles[0] * 360
+    x = angles[1] * 360
     z = angles[2] * 360
     return x, y
