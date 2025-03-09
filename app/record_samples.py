@@ -1,3 +1,4 @@
+import json
 from contextlib import redirect_stderr
 import cv2
 import numpy as np
@@ -28,16 +29,23 @@ try:
 except AttributeError:
     pass
 
-# Define the gestures
-GESTURES = [
-    "Nod",
-    "Shake",
-    "Mouth",
-    "Eyebrows",
-    "Blink",
-    "Smile",
-    "None",
-]
+# Load gestures from file (replace the GESTURES list).
+with open("gestures.json", "r") as f:
+    gestures_dict = json.load(f)
+
+# Define gesture order (so that filenames use gesture index consistently).
+GESTURES = ["nod", "shake", "mouth", "eyebrows", "blink", "smile", "none"]
+
+# # Define the gestures
+# GESTURES = [
+#     "Nod",
+#     "Shake",
+#     "Mouth",
+#     "Eyebrows",
+#     "Blink",
+#     "Smile",
+#     "None",
+# ]
 current_gesture_index = 0
 # We'll remove manual recording toggling as recording is automatic per gesture
 video_writer = None
@@ -154,8 +162,9 @@ def show_timeline_and_features():
     text_color = (0, 0, 0)   # black text
 
     # Lists to store composite image info and CSV features.
-    composite_info = []  # Each entry: (composite image, video_frame_count, gesture_label)
-    csv_info = []        # Each entry: (header, data_rows)
+    composite_info = []      # Each entry: (composite image, video_frame_count, gesture_key)
+    csv_info = []            # Each entry: (header, data_rows)
+    segment_feature_counts = []  # Number of CSV rows per segment
 
     # Process video files in output_dir (sorted order).
     video_files = get_sorted_video_file_list(output_dir)
@@ -177,20 +186,37 @@ def show_timeline_and_features():
             resized_frame = cv2.resize(frame, (new_w, target_img_height))
             # Create composite image: header on top and resized frame below; fill background with grey.
             composite = np.full((composite_height, new_w, 3), 200, dtype=np.uint8)
-            # Determine gesture name from filename.
+            # Determine gesture from filename.
             base = os.path.basename(video_path)
             parts = base.split("_")
             if len(parts) >= 2:
                 try:
                     gesture_index = int(parts[1])
-                    gesture_label = GESTURES[gesture_index]
+                    gesture_key = GESTURES[gesture_index]
+                    gesture_label = gestures_dict[gesture_key]["name"]
                 except Exception:
+                    gesture_key = "unknown"
                     gesture_label = "Unknown"
             else:
+                gesture_key = "unknown"
                 gesture_label = "Unknown"
+            # # Write the gesture label in header.
+            # (text_w, text_h), _ = cv2.getTextSize(gesture_label, font_face, font_scale, thickness)
+            # text_x = (new_w - text_w) // 2
+            # text_y = text_h
+            # cv2.putText(
+            #     composite,
+            #     gesture_label,
+            #     (text_x, text_y),
+            #     font_face,
+            #     font_scale,
+            #     text_color,
+            #     thickness,
+            #     lineType=cv2.LINE_AA,
+            # )
             # Place the resized frame below the header.
             composite[header_height:composite_height, 0:new_w, :] = resized_frame
-            composite_info.append((composite, total_frames, gesture_label))
+            composite_info.append((composite, total_frames, gesture_key))
         # Process corresponding CSV file.
         csv_path = os.path.splitext(video_path)[0] + ".csv"
         if os.path.exists(csv_path):
@@ -198,7 +224,6 @@ def show_timeline_and_features():
                 with open(csv_path, "r") as f_csv:
                     reader = csv.reader(f_csv)
                     rows = list(reader)
-                    # Skip if CSV has no data rows.
                     if len(rows) < 2:
                         continue
                     data_rows = []
@@ -206,20 +231,22 @@ def show_timeline_and_features():
                         if row:
                             data_rows.append([float(val) for val in row])
                     csv_info.append((rows[0], data_rows))
+                    segment_feature_counts.append(len(data_rows))
             except Exception as e:
                 print(f"Error processing {csv_path}: {e}")
 
     # Build timeline image.
-    timeline_total_width = 100  # overall desired width
+    timeline_total_width = 100  # overall desired minimum width
     timeline_parts = []
     boundaries = []   # left boundary x positions (in pixels)
     cumulative = 0
+    # Use composite_info (from video files) to set timeline width.
     total_video_frames = sum(frames for (_, frames, _) in composite_info)
     timeline_total_width = max(timeline_total_width, total_video_frames)
-    for composite, frames, gesture_label in composite_info:
+    for composite, frames, gesture_key in composite_info:
         # Compute target width proportional to video frame count.
         target_width = int((frames / total_video_frames) * timeline_total_width)
-        boundaries.append(cumulative)  # store left boundary for this frame
+        boundaries.append(cumulative)
         current_width = composite.shape[1]
         if current_width < target_width:
             total_pad = target_width - current_width
@@ -232,7 +259,8 @@ def show_timeline_and_features():
             excess = current_width - target_width
             crop_left = excess // 2
             composite_resized = composite[:, crop_left:crop_left + target_width]
-
+        # Re-add gesture label (if cropping changed it)
+        gesture_label = gestures_dict[gesture_key]["name"]
         (text_w, text_h), _ = cv2.getTextSize(gesture_label, font_face, font_scale, thickness)
         text_x = (target_width - text_w) // 2
         text_y = text_h
@@ -249,36 +277,85 @@ def show_timeline_and_features():
         timeline_parts.append(composite_resized)
         cumulative += target_width
 
-    # If total width is less than desired, append a grey filler.
-    current_width = sum(part.shape[1] for part in timeline_parts)
-    if current_width < timeline_total_width:
-        filler = np.full((composite_height, timeline_total_width - current_width, 3), 200, dtype=np.uint8)
-        timeline_parts.append(filler)
-    timeline = np.hstack(timeline_parts) if timeline_parts else None
+    if timeline_parts:
+        current_width = sum(part.shape[1] for part in timeline_parts)
+        if current_width < timeline_total_width:
+            filler = np.full((composite_height, timeline_total_width - current_width, 3), 200, dtype=np.uint8)
+            timeline_parts.append(filler)
+        timeline = np.hstack(timeline_parts)
+    else:
+        timeline = None
 
     # Aggregate feature data from CSV files in sorted order.
     all_features = []
     header = None
-    total_feature_frames = 0
-    for csv_header, data_rows in csv_info:
+    segment_boundaries = []  # cumulative boundaries of feature rows per segment
+    cumulative_feat = 0
+    for i, (csv_header, data_rows) in enumerate(csv_info):
         all_features.extend(data_rows)
-        total_feature_frames += len(data_rows)
+        cumulative_feat += len(data_rows)
+        segment_boundaries.append(cumulative_feat)
         if header is None:
             header = csv_header
     all_features = np.array(all_features) if all_features else None
 
     # Scale x-axis for features so that total time equals timeline_total_width.
-    factor = timeline_total_width / total_feature_frames if total_feature_frames else 1
-    x_vals_scaled = (
-        [x * factor for x in range(total_feature_frames)]
-        if total_feature_frames
-        else []
-    )
+    all_features_count = len(all_features)
+    factor = timeline_total_width / (all_features_count) if all_features_count else 1
+    x_vals_scaled = [x * factor for x in range(all_features_count)] if all_features_count else []
 
-    # Create figure and maximize window (Windows-specific).
-    fig, (ax1, ax2) = plt.subplots(
-        2, 1, gridspec_kw={"height_ratios": [1, 2]}, figsize=(14, 8)
-    )
+    # --- Detection of significant feature fluctuations ---
+    # For each gesture segment we will detect fluctuations based on the mapping in gestures_dict.
+    # We assume that segments (processed in order) correspond to the order in csv_info.
+    detections = []  # Each detection is a tuple: (x_start, x_end)
+    cumulative_feat_prev = 0
+    for i, (csv_header, data_rows) in enumerate(csv_info):
+        seg_feat = np.array(data_rows)  # shape: (num_rows, num_features)
+        seg_length = seg_feat.shape[0]
+        # Compute x offset for this segment.
+        x_offset = cumulative_feat_prev * factor
+        cumulative_feat_prev += seg_length
+        # Get gesture key for this segment from composite_info; assume same order.
+        if i < len(composite_info):
+            _, _, gesture_key = composite_info[i]
+        else:
+            gesture_key = "unknown"
+        # If the gesture mapping is present, check only its features.
+        if gesture_key in gestures_dict:
+            features_of_interest = gestures_dict[gesture_key]["features"]
+            thresh = gestures_dict[gesture_key]["threshold"]
+            # For each feature name, get its column index.
+            for feat_name in features_of_interest:
+                if header and feat_name in header:
+                    col = header.index(feat_name)
+                    subdata = seg_feat[:, col]
+                    baseline = np.median(subdata)
+                    # Find indices inside this segment when absolute deviation exceeds the threshold.
+                    indices = np.where(np.abs(subdata - baseline) > thresh)[0]
+                    if len(indices) == 0:
+                        continue
+                    # Group contiguous indices into intervals.
+                    start_idx = indices[0]
+                    for j in range(1, len(indices)):
+                        if indices[j] != indices[j - 1] + 1:
+                            end_idx = indices[j - 1]
+                            # Convert to global x-coordinates.
+                            x0 = x_offset + start_idx * factor
+                            x1 = x_offset + end_idx * factor
+                            detections.append((x0, x1))
+                            start_idx = indices[j]
+                    # Add last interval.
+                    end_idx = indices[-1]
+                    x0 = x_offset + start_idx * factor
+                    x1 = x_offset + end_idx * factor
+                    detections.append((x0, x1))
+        else:
+            # No mapping; no detection.
+            pass
+
+    # --- Plotting: Create figure and maximize window (Windows-specific). ---
+    fig, (ax1, ax2) = plt.subplots(2, 1, 
+        gridspec_kw={"height_ratios": [1, 2]}, figsize=(14, 8))
     mng = plt.get_current_fig_manager()
     try:
         mng.window.state("zoomed")
@@ -287,13 +364,11 @@ def show_timeline_and_features():
 
     # Plot timeline (top axes):
     if timeline is not None:
-        # Use extent so that the timeline image covers x from 0 to timeline_total_width.
         timeline_rgb = cv2.cvtColor(timeline, cv2.COLOR_BGR2RGB)
         ax1.imshow(timeline_rgb, extent=[0, timeline_total_width, 0, composite_height])
         ax1.set_xlim([0, timeline_total_width])
         ax1.axis("off")
         ax1.set_title("Timeline of Recorded Gestures")
-        # Draw vertical grey delimiters at each boundary.
         for b in boundaries:
             ax1.axvline(x=b, color="grey", linewidth=0.5)
     else:
@@ -316,13 +391,15 @@ def show_timeline_and_features():
         # Draw vertical grey delimiters on the feature plot as well.
         for b in boundaries:
             ax2.axvline(x=b, color="grey", linewidth=0.5)
+        # Draw blue overlay rectangles corresponding to detections.
+        for (x0, x1) in detections:
+            ax2.axvspan(x0, x1, color="blue", alpha=0.2)
     else:
         ax2.text(0.5, 0.5, "No feature data available", ha="center", va="center")
         ax2.axis("off")
 
     plt.tight_layout()
     plt.show()
-
 
 
 def draw_play_pause_symbol(frame, is_paused):
@@ -363,10 +440,10 @@ def get_sort_key(f):
     key = (parts[1] + "_" + parts[2].split('.')[0], f)
     return key
 
-# Main loop
 def get_sorted_video_file_list(output_dir, get_sort_key_func=get_sort_key):
     return sorted([f for f in os.listdir(output_dir) if f.endswith(".mp4")], key=get_sort_key_func)
 
+# Main loop
 while True:
     ret, frame = cap.read()
     # Flip frame horizontally for a mirror effect.
@@ -399,7 +476,7 @@ while True:
                             temp_filename, fourcc, fps, (frame_width, frame_height)
                         )
                     gesture_frame_count = 0
-                    print(f"Recording gesture {GESTURES[current_gesture_index]}...")
+                    print(f"Recording gesture {gestures_dict[GESTURES[current_gesture_index]]["name"]}...")
 
                 if video_writer is not None:
                     video_writer.write(frame)
@@ -427,7 +504,7 @@ while True:
                 )
 
                 # Display current gesture name.
-                gesture_text = GESTURES[current_gesture_index]
+                gesture_text = gestures_dict[GESTURES[current_gesture_index]]["name"].capitalize()
                 gesture_font_scale = 2
                 gesture_thickness = 3
                 text_size, _ = cv2.getTextSize(
@@ -487,7 +564,7 @@ while True:
     # Display current gesture for debugging.
     cv2.putText(
         frame,
-        f"Gesture: {GESTURES[current_gesture_index]}",
+        f"Gesture: {gestures_dict[GESTURES[current_gesture_index]]["name"]}",
         (10, frame_height - 60),
         font,
         1,
