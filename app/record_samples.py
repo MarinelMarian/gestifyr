@@ -144,17 +144,17 @@ def process_video_file(video_path):
 
 def show_timeline_and_features():
     # Parameters for timeline images.
-    target_img_height = 100  # fixed image height
-    header_height = 10  # header space for gesture name
+    target_img_height = 80  # fixed image height
+    header_height = 10       # header space for gesture name
     composite_height = header_height + target_img_height
     font_face = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.33
     thickness = 1
-    text_color = (0, 0, 0)  # black text
+    text_color = (0, 0, 0)   # black text
 
     # Lists to store composite image info and CSV features.
     composite_info = []  # Each entry: (composite image, video_frame_count)
-    csv_info = []  # Each entry: (header, data_rows)
+    csv_info = []        # Each entry: (header, data_rows)
 
     # Process video files in output_dir (sorted order).
     video_files = sorted(
@@ -180,8 +180,8 @@ def show_timeline_and_features():
             scale = target_img_height / h
             new_w = int(w * scale)
             resized_frame = cv2.resize(frame, (new_w, target_img_height))
-            # Create composite image: header on top and resized frame below.
-            composite = np.full((composite_height, new_w, 3), 255, dtype=np.uint8)
+            # Create composite image: header on top and resized frame below; fill background with grey.
+            composite = np.full((composite_height, new_w, 3), 200, dtype=np.uint8)
             # Determine gesture name from filename.
             base = os.path.basename(video_path)
             parts = base.split("_")
@@ -193,24 +193,9 @@ def show_timeline_and_features():
                     gesture_label = "Unknown"
             else:
                 gesture_label = "Unknown"
-            # Center gesture name in header.
-            (text_w, text_h), _ = cv2.getTextSize(
-                gesture_label, font_face, font_scale, thickness
-            )
-            text_x = (new_w - text_w) // 2
-            text_y = (header_height + text_h) // 2
-            cv2.putText(
-                composite,
-                gesture_label,
-                (text_x, text_y),
-                font_face,
-                font_scale,
-                text_color,
-                thickness,
-            )
             # Place the resized frame below the header.
             composite[header_height:composite_height, 0:new_w, :] = resized_frame
-            composite_info.append((composite, total_frames))
+            composite_info.append((composite, total_frames, gesture_label))
         # Process corresponding CSV file.
         csv_path = os.path.splitext(video_path)[0] + ".csv"
         if os.path.exists(csv_path):
@@ -230,20 +215,50 @@ def show_timeline_and_features():
                 print(f"Error processing {csv_path}: {e}")
 
     # Build timeline image.
-    # Sum total frames of all videos.
-    total_video_frames = sum(frames for (_, frames) in composite_info)
-    # Set desired overall timeline width (in pixels).
-    timeline_total_width = 1000
+    timeline_total_width = 1000  # overall desired width
     timeline_parts = []
-    for composite, frames in composite_info:
-        # Resize each composite image horizontally in proportion to its video frame count.
+    boundaries = []   # left boundary x positions (in pixels)
+    cumulative = 0
+    total_video_frames = sum(frames for (_, frames, _) in composite_info)
+    for composite, frames, gesture_label in composite_info:
+        # Compute target width proportional to video frame count.
         target_width = int((frames / total_video_frames) * timeline_total_width)
-        composite_resized = cv2.resize(composite, (target_width, composite_height))
+        boundaries.append(cumulative)  # store left boundary for this frame
+        current_width = composite.shape[1]
+        if current_width < target_width:
+            total_pad = target_width - current_width
+            pad_left = total_pad // 2
+            pad_right = total_pad - pad_left
+            left_pad = np.full((composite.shape[0], pad_left, 3), 200, dtype=np.uint8)
+            right_pad = np.full((composite.shape[0], pad_right, 3), 200, dtype=np.uint8)
+            composite_resized = np.hstack((left_pad, composite, right_pad))
+        else:
+            excess = current_width - target_width
+            crop_left = excess // 2
+            composite_resized = composite[:, crop_left:crop_left + target_width]
+
+        (text_w, text_h), _ = cv2.getTextSize(gesture_label, font_face, font_scale, thickness)
+        text_x = (target_width - text_w) // 2
+        text_y = text_h
+        cv2.putText(
+            composite_resized,
+            gesture_label,
+            (text_x, text_y),
+            font_face,
+            font_scale,
+            text_color,
+            thickness,
+            lineType=cv2.LINE_AA,
+        )
         timeline_parts.append(composite_resized)
-    if timeline_parts:
-        timeline = np.hstack(timeline_parts)
-    else:
-        timeline = None
+        cumulative += target_width
+
+    # If total width is less than desired, append a grey filler.
+    current_width = sum(part.shape[1] for part in timeline_parts)
+    if current_width < timeline_total_width:
+        filler = np.full((composite_height, timeline_total_width - current_width, 3), 200, dtype=np.uint8)
+        timeline_parts.append(filler)
+    timeline = np.hstack(timeline_parts) if timeline_parts else None
 
     # Aggregate feature data from CSV files in sorted order.
     all_features = []
@@ -282,6 +297,9 @@ def show_timeline_and_features():
         ax1.set_xlim([0, timeline_total_width])
         ax1.axis("off")
         ax1.set_title("Timeline of Recorded Gestures")
+        # Draw vertical grey delimiters at each boundary.
+        for b in boundaries:
+            ax1.axvline(x=b, color="grey", linewidth=0.5)
     else:
         ax1.text(0.5, 0.5, "No timeline available", ha="center", va="center")
         ax1.axis("off")
@@ -299,13 +317,15 @@ def show_timeline_and_features():
         ax2.set_title("Monitored Features")
         ax2.legend(loc="lower right")
         ax2.set_xlim(0, timeline_total_width)
+        # Draw vertical grey delimiters on the feature plot as well.
+        for b in boundaries:
+            ax2.axvline(x=b, color="grey", linewidth=0.5)
     else:
         ax2.text(0.5, 0.5, "No feature data available", ha="center", va="center")
         ax2.axis("off")
 
     plt.tight_layout()
     plt.show()
-
 
 # Main loop
 while True:

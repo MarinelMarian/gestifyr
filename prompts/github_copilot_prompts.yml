@@ -28,6 +28,14 @@ Prompt:
 Prompt:
 "After all gesture videos have been processed, maximize the app window. Inside the window display a 100px high timeline that shows as an image, the first frame of each recorded video segment. Next to the timeline (at the bottom), show a plot of all the monitored features. For inspiration on how to do it use the code in analyzeMovement.py. In record_sample.py, please create a function that does this plot parallel and aligned to the timeline of all video files."
 
+# More plot display options
+Prompt:
+"The names of the gestures and the frame in the timeline look pixelated. Keep the frame in the timeline resized to 100px height and fill the space between frames (if any) with grey. Also make sure the left margin of every frame aligns with the start of the corresponding plotted data in the timeline. Add very thin grey line delimiters that span over the timeline and the plot, where each delimiter is positioned at the left margin of each frame."
+
+# More timeline display options
+Prompt:
+"instead of resizing the composite do a padding with grey background until you fill in the target width"
+
 Gesture Preview Navigation
 Prompt:
 "Enhance playback mode so that the first gesture segment is highlighted with a semi-transparent blue tint. When the space bar is pressed, open a separate preview window that displays the video for that particular gesture segment. Allow navigation between gesture segments using the left and right arrow keys."
