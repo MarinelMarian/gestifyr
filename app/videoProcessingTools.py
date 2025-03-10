@@ -129,9 +129,9 @@ def overlayBar( frame, **kwargs):
     icon_image = kwargs['icon_image']
     thresh = kwargs['threshold']
     # Resize the icon if needed
-    icon_size = 60  # Adjust this for desired size
-    bar_width = 200
-    bar_height = 60
+    icon_size = 80  # Adjust this for desired size
+    bar_width = 300
+    bar_height = 80
     icon_image = cv2.resize(icon_image, (icon_size, icon_size))
     # Get frame dimensions
     height, width, _ = frame.shape
@@ -163,8 +163,21 @@ def overlayBar( frame, **kwargs):
     # Draw progress bar background
     cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height), (80, 80, 80), -1)
 
+    # draw triangle on threshold
+    triangle_pts = np.array([
+        [bar_x + int(thresh * bar_width) - 7, bar_y -9],  # Top left
+        [bar_x + int(thresh * bar_width) + 7, bar_y -9],  # top right 
+        [bar_x + int(thresh * bar_width), bar_y -1]  # Bottom down
+    ], np.int32)
+
+    triangle_pts = triangle_pts.reshape((-1, 1, 2))
+
+    # Draw filled triangle with transparency
+    cv2.fillPoly(frame, [triangle_pts], (0, 255, 0))  # Green triangle
+
+
     # Draw progress bar foreground
     fill_width = int(value * bar_width)
-    fill_color = (0, 255, 0) if value>thresh else (33, 222, 255)
+    fill_color = (0, 255, 0) if value>=thresh else (33, 222, 255)
     cv2.rectangle(frame, (bar_x, bar_y), (bar_x + fill_width, bar_y + bar_height), fill_color, -1)
     return frame
