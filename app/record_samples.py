@@ -17,7 +17,8 @@ from dotenv import load_dotenv
 load_dotenv()
 BASE_PATH = os.getenv("BASE_PATH")
 APP_REL_PATH = os.getenv("APP_REL_PATH")
-WEBCAM_INDEX = int(os.getenv("WEBCAM_INDEX")) or 0
+WEBCAM_INDEX = int(os.getenv("WEBCAM_INDEX") or 0) 
+DETECTION_INTERVAL_SEC = float(os.getenv("DETECTION_INTERVAL_SEC") or 0.25)
 
 # Set current working directory to the app folder
 os.chdir(BASE_PATH + APP_REL_PATH)
@@ -36,16 +37,6 @@ with open("gestures.json", "r") as f:
 # Define gesture order (so that filenames use gesture index consistently).
 GESTURES = ["nod", "shake", "mouth", "eyebrows", "blink", "smile", "none"]
 
-# # Define the gestures
-# GESTURES = [
-#     "Nod",
-#     "Shake",
-#     "Mouth",
-#     "Eyebrows",
-#     "Blink",
-#     "Smile",
-#     "None",
-# ]
 current_gesture_index = 0
 # We'll remove manual recording toggling as recording is automatic per gesture
 video_writer = None
@@ -150,6 +141,81 @@ def process_video_file(video_path):
     write_to_csv(csv_filename, [header] + all_features)
     print(f"Processed {video_path}\nSaved CSV: {csv_filename}")
 
+def detect_fluctuations_for_feature(feature_data, fps, interval_sec, threshold):
+    """
+    Given a 1D numpy array 'feature_data' for one feature in a gesture segment,
+    split it into intervals of duration 'interval_sec' (in seconds) given the 'fps',
+    and compute the mean of the absolute values in each interval.
+
+    Determine the baseline as the minimum of these means and then mark any interval
+    where (mean - baseline) > threshold as significant.
+
+    The detection start is moved back to include the previous interval (if available)
+    and the detection end is moved forward to include the next interval (if available),
+    so that we capture the state change from baseline to significant and back.
+
+    Returns:
+        A list containing one detection tuple (start_idx, end_idx) or an empty list.
+    """
+    interval_len = max(1, int(fps * interval_sec))
+    n = len(feature_data)
+    means = []
+    intervals = []
+    for i in range(0, n, interval_len):
+        block = feature_data[i: i + interval_len]
+        mean_val = np.mean(np.abs(block))
+        means.append(mean_val)
+        intervals.append((i, i + len(block) - 1))
+    
+    if not means:
+        return []
+    
+    baseline = min(means)
+    significant_flags = [(m - baseline) > threshold for m in means]
+    
+    detections = []
+    i = 0
+    while i < len(significant_flags):
+        if significant_flags[i]:
+            # Extend start: include the previous interval (if available)
+            start_interval = intervals[i][0]
+            if i > 0:
+                start_interval = intervals[i - 1][0]
+            # Process contiguous significant intervals
+            while i < len(significant_flags) and significant_flags[i]:
+                end_interval = intervals[i][1]
+                i += 1
+            # Extend end: include the next interval (if available)
+            if i < len(intervals):
+                end_interval = intervals[i][1]
+            detections.append((start_interval, end_interval))
+        else:
+            i += 1
+
+    # Merge all detections into a single detection if more than one is found.
+    if detections:
+        overall_start = min(d[0] for d in detections)
+        overall_end = max(d[1] for d in detections)
+        return [(overall_start, overall_end)]
+    else:
+        return []    
+def merge_intervals(intervals):
+    """
+    Given a list of intervals (start, end), merge overlapping or adjacent intervals.
+    """
+    if not intervals:
+        return []
+    # Sort intervals by start index.
+    intervals.sort(key=lambda x: x[0])
+    merged = [intervals[0]]
+    for current in intervals[1:]:
+        prev = merged[-1]
+        # Consider overlapping or adjacent intervals as mergeable.
+        if current[0] <= prev[1] + 1:
+            merged[-1] = (prev[0], max(prev[1], current[1]))
+        else:
+            merged.append(current)
+    return merged
 
 def show_timeline_and_features():
     # Parameters for timeline images.
@@ -305,53 +371,40 @@ def show_timeline_and_features():
     x_vals_scaled = [x * factor for x in range(all_features_count)] if all_features_count else []
 
     # --- Detection of significant feature fluctuations ---
-    # For each gesture segment we will detect fluctuations based on the mapping in gestures_dict.
-    # We assume that segments (processed in order) correspond to the order in csv_info.
-    detections = []  # Each detection is a tuple: (x_start, x_end)
+    # For each gesture segment we now compute means over 0.5-second intervals.
+    detections = []  # Each detection is a tuple: (global_x_start, global_x_end)
     cumulative_feat_prev = 0
     for i, (csv_header, data_rows) in enumerate(csv_info):
         seg_feat = np.array(data_rows)  # shape: (num_rows, num_features)
         seg_length = seg_feat.shape[0]
-        # Compute x offset for this segment.
+        # Compute global x offset for this segment.
         x_offset = cumulative_feat_prev * factor
-        cumulative_feat_prev += seg_length
         # Get gesture key for this segment from composite_info; assume same order.
         if i < len(composite_info):
             _, _, gesture_key = composite_info[i]
         else:
             gesture_key = "unknown"
-        # If the gesture mapping is present, check only its features.
+        segment_detections = []
         if gesture_key in gestures_dict:
             features_of_interest = gestures_dict[gesture_key]["features"]
-            thresh = gestures_dict[gesture_key]["threshold"]
-            # For each feature name, get its column index.
+            threshold = gestures_dict[gesture_key]["threshold"]
+            # Check each feature of interest.
             for feat_name in features_of_interest:
                 if header and feat_name in header:
                     col = header.index(feat_name)
                     subdata = seg_feat[:, col]
-                    baseline = np.median(subdata)
-                    # Find indices inside this segment when absolute deviation exceeds the threshold.
-                    indices = np.where(np.abs(subdata - baseline) > thresh)[0]
-                    if len(indices) == 0:
-                        continue
-                    # Group contiguous indices into intervals.
-                    start_idx = indices[0]
-                    for j in range(1, len(indices)):
-                        if indices[j] != indices[j - 1] + 1:
-                            end_idx = indices[j - 1]
-                            # Convert to global x-coordinates.
-                            x0 = x_offset + start_idx * factor
-                            x1 = x_offset + end_idx * factor
-                            detections.append((x0, x1))
-                            start_idx = indices[j]
-                    # Add last interval.
-                    end_idx = indices[-1]
-                    x0 = x_offset + start_idx * factor
-                    x1 = x_offset + end_idx * factor
-                    detections.append((x0, x1))
-        else:
-            # No mapping; no detection.
-            pass
+                    # Get detections for this feature over DETECTION_INTERVAL_SEC intervals.
+                    det = detect_fluctuations_for_feature(subdata, fps, DETECTION_INTERVAL_SEC, threshold)
+                    segment_detections.extend(det)
+        # Merge detections from all features in this segment.
+        segment_detections = merge_intervals(segment_detections)
+        # Convert detection indices to global x-axis positions.
+        for (start_idx, end_idx) in segment_detections:
+            global_x0 = x_offset + start_idx * factor
+            global_x1 = x_offset + end_idx * factor
+            detections.append((global_x0, global_x1))
+        cumulative_feat_prev += seg_length
+
 
     # --- Plotting: Create figure and maximize window (Windows-specific). ---
     fig, (ax1, ax2) = plt.subplots(2, 1, 
@@ -400,7 +453,6 @@ def show_timeline_and_features():
 
     plt.tight_layout()
     plt.show()
-
 
 def draw_play_pause_symbol(frame, is_paused):
     """

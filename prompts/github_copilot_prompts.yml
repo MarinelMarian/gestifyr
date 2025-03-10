@@ -62,8 +62,17 @@ Use of Unicode Symbols: >
   cv2.imshow('Fonts', cv2_im_processed)
   cv2.waitKey(0)
 
+Identify significant gesture segments and create a detection: >
+  Extract the detection of significant feature fluctuations to a separate method called detect_fluctuations_for_feature. After isolating the features of interest, the algorithm should take each 0.5 seconds interval in the gesture and compute a mean over it. Now establish as a baseline the minimum of the absolute value by looking at all the computed means. Now compute the difference against the baseline and figure out what's significant based on the set threshold. Make sure that in the detect_fluctuations_for_feature, if you have multiple detections inside the same gesture, replace them with a single detection that takes the earliest start and the latest end.
+
+Enhance detections to include state change from baseline to significant and back to baseline: >
+  In the detect_fluctuations_for_feature, the detection start should actually include the previous analyzed interval. This way we'll capture the state change from baseline to significant change. In the same way, the end of the detection should include the next analyzed interval, so that we capture the state change from significant to baseline.
+
+Save detections: >
+  In the show_timeline_and_features (before the plotting begins), for each detection, save the cropped csv and the cropped mp4 video (according to the detection boundaries) in a folders called detections (create the folder if it doesn't exist). Use the same filenames as you used for the gestures.
+
 Gesture Preview Navigation: >
-  Enhance playback mode so that the first gesture segment is highlighted with a semi-transparent blue tint. When the space bar is pressed, open a separate preview window that displays the video for that particular gesture segment. Allow navigation between gesture segments using the left and right arrow keys.
+  Enhance playback mode so that the first gesture detection is highlighted with a semi-transparent green tint. When the space bar is pressed, open a separate preview window that displays the video for that particular gesture segment. Allow navigation between gesture segments using the left and right arrow keys.
 
 Gesture Selection for Saving: >
   Allow the user to select a gesture on the timeline for saving: if a gesture is selected, pressing the down arrow should mark it as saved by displaying a small green checkbox on top of that timeline segment.
