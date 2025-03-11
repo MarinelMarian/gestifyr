@@ -8,6 +8,7 @@ import time
 import matplotlib.pyplot as plt
 import csv
 from PIL import ImageFont, ImageDraw, Image
+import shutil
 
 from videoProcessingTools import get_angles
 from mediapipe_extract import extract_features_v2
@@ -16,7 +17,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 BASE_PATH = os.getenv("BASE_PATH")
-APP_REL_PATH = os.getenv("APP_REL_PATH")
+APP_REL_PATH = os.getenv("APP_REL_PATH") or "app/"
 WEBCAM_INDEX = int(os.getenv("WEBCAM_INDEX") or 0) 
 DETECTION_INTERVAL_SEC = float(os.getenv("DETECTION_INTERVAL_SEC") or 0.25)
 
@@ -624,21 +625,87 @@ def playback_detection_video(detection, output_dir, fps):
     cap_vid.release()
     cv2.destroyWindow(window_name)
 
+# New helper: update the color for a given state.
+def get_detection_color(state):
+    return {"none": "blue", "save": "green", "skip": "grey"}.get(state, "blue")
 
-def interactive_feature_plot(timeline, boundaries, composite_height, all_features, header, x_vals_scaled, global_detections, timeline_total_width, fps, output_dir):
+# New helper: (re)draw all detection overlays based on detection_states.
+def draw_detection_overlays(ax, global_detections, detection_states):
+    patches = {}  # mapping detection index -> patch artist.
+    for idx, (x0, x1, fname) in enumerate(global_detections):
+        state = detection_states.get(idx, "none")
+        color = get_detection_color(state)
+        patch = ax.axvspan(x0, x1, color=color, alpha=0.2)
+        patches[idx] = patch
+    return patches
+
+# New helper: update all detection overlays (remove old ones and redraw).
+def update_all_detection_overlays(ax, global_detections, detection_states, detection_patches):
+    # Remove previous patches.
+    for patch in detection_patches.values():
+        try:
+            patch.remove()
+        except Exception:
+            pass
+    # Redraw patches.
+    new_patches = draw_detection_overlays(ax, global_detections, detection_states)
+    return new_patches
+
+# New helper: process detection states to copy files.
+def process_detection_states(global_detections, detection_states, output_dir):
+    samples_folder = "samples"
+    skipped_folder = "skipped"
+    os.makedirs(samples_folder, exist_ok=True)
+    os.makedirs(skipped_folder, exist_ok=True)
+    
+    for idx, (_, _, csv_fname) in enumerate(global_detections):
+        state = detection_states.get(idx, "none")
+        base = os.path.splitext(csv_fname)[0]
+        src_csv = os.path.join(output_dir, base + ".csv")
+        src_video = os.path.join(output_dir, base + ".mp4")
+        if state == "save":
+            dst_csv = os.path.join(samples_folder, base + ".csv")
+            dst_video = os.path.join(samples_folder, base + ".mp4")
+        elif state == "skip" or state == "none":
+            dst_csv = os.path.join(skipped_folder, base + ".csv")
+            dst_video = os.path.join(skipped_folder, base + ".mp4")
+        else:
+            continue
+        try:
+            if not os.path.exists(dst_csv):
+                shutil.copy2(src_csv, dst_csv)
+                print(f"Copied CSV to {dst_csv}")
+        except Exception as e:
+            print(f"Error copying CSV {src_csv}: {e}")
+        try:
+            if not os.path.exists(dst_video):
+                shutil.copy2(src_video, dst_video)
+                print(f"Copied video to {dst_video}")
+        except Exception as e:
+            print(f"Error copying video {src_video}: {e}")
+
+def interactive_feature_plot(timeline, boundaries, composite_height, all_features, header, 
+                               x_vals_scaled, global_detections, timeline_total_width, fps, output_dir):
     """
     Creates the interactive figure with timeline (ax1) and monitored features (ax2).
-    Allows mouse click selection or left/right arrow keys to change the selected detection.
-    Pressing space in this figure will play the corresponding detection video.
+    Allows mouse click selection and keyboard events:
+      - Left/right arrow keys: change selected detection.
+      - Down arrow: mark selected detection as "save" (green tint).
+      - Up arrow: mark selected detection as "skip" (grey tint).
+      - 'a': mark all detections as "save".
+      - 'w': process all detections—copy files to folder "samples" or "skipped".
+      - 'c': clear all detections (reset to "none").
+      - Space: play the video for the selected detection.
     """
-    fig, (ax1, ax2) = plt.subplots(2, 1, gridspec_kw={"height_ratios": [1, 2]}, figsize=(14, 8))
+    fig, (ax1, ax2) = plt.subplots(2, 1, 
+          gridspec_kw={"height_ratios": [1, 2]}, figsize=(14, 8))
     mng = plt.get_current_fig_manager()
     try:
         mng.window.state("zoomed")
     except Exception:
         mng.resize(1400, 1000)
 
-    # Plot timeline (ax1)
+    # Plot timeline (ax1) as before.
     if timeline is not None:
         timeline_rgb = cv2.cvtColor(timeline, cv2.COLOR_BGR2RGB)
         ax1.imshow(timeline_rgb, extent=[0, timeline_total_width, 0, composite_height])
@@ -663,71 +730,99 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
         ax2.set_xlim(0, timeline_total_width)
         for b in boundaries:
             ax2.axvline(x=b, color="grey", linewidth=0.5)
-        # Draw blue overlay for all detections.
-        for (x0, x1, fname) in global_detections:
-            ax2.axvspan(x0, x1, color="blue", alpha=0.2)
     else:
         ax2.text(0.5, 0.5, "No feature data available", ha="center", va="center")
         ax2.axis("off")
 
-    # We will highlight the selected detection by drawing a red overlay.
-    selected_idx = [0]  # mutable container to hold currently selected detection index.
-    highlight_patch = [None]  # to store reference to the drawn patch
+    # Draw detection overlays based on detection_states.
+    # detection_states is a global dict: detection index -> state ("none", "save", "skip").
+    global detection_states
+    for idx in range(len(global_detections)):
+        if idx not in detection_states:
+            detection_states[idx] = "none"
+    detection_patches = draw_detection_overlays(ax2, global_detections, detection_states)
 
-    def update_highlight():
-        """Remove existing highlight and add a new one for the currently selected detection."""
+    # Selected detection index.
+    selected_idx = [0]
+    # Highlight selection with an extra black border (we draw an extra patch).
+    highlight_patch = [None]
+    def update_selection_highlight():
         if highlight_patch[0] is not None:
-            highlight_patch[0].remove()
-        if global_detections and (0 <= selected_idx[0] < len(global_detections)):
+            try:
+                highlight_patch[0].remove()
+            except Exception:
+                pass
+        if global_detections and 0 <= selected_idx[0] < len(global_detections):
             x0, x1, _ = global_detections[selected_idx[0]]
-            # Draw a red semi-transparent overlay.
-            highlight_patch[0] = ax2.axvspan(x0, x1, color="blue", alpha=0.3)
-            fig.canvas.draw_idle()
+            highlight_patch[0] = ax2.axvspan(x0, x1, color="black", alpha=0.3)
+        fig.canvas.draw_idle()
+
+    def refresh_overlays():
+        nonlocal detection_patches
+        detection_patches = update_all_detection_overlays(ax2, global_detections, detection_states, detection_patches)
+        fig.canvas.draw_idle()
 
     def on_key(event):
-        # Handle left/right arrow keys for selection and space bar for playback.
+        # Left/Right: change selection.
         if not global_detections:
             return
         if event.key == "left":
             selected_idx[0] = max(0, selected_idx[0] - 1)
-            update_highlight()
+            update_selection_highlight()
         elif event.key == "right":
             selected_idx[0] = min(len(global_detections) - 1, selected_idx[0] + 1)
-            update_highlight()
+            update_selection_highlight()
+        elif event.key == "down":
+            # Mark selected detection as "save".
+            detection_states[selected_idx[0]] = "save"
+            refresh_overlays()
+        elif event.key == "up":
+            # Mark selected detection as "skip".
+            detection_states[selected_idx[0]] = "skip"
+            refresh_overlays()
+        elif event.key == "a":
+            # Mark all detections as "save".
+            for idx in range(len(global_detections)):
+                detection_states[idx] = "save"
+            refresh_overlays()
+        elif event.key == "c":
+            # Clear all detections.
+            for idx in range(len(global_detections)):
+                detection_states[idx] = "none"
+            refresh_overlays()
+        elif event.key == "w":
+            # Process: copy all detections marked for save/skip.
+            process_detection_states(global_detections, detection_states, output_dir)
         elif event.key == " ":
-            # Playback the selected detection.
+            # Playback selected detection.
             detection = global_detections[selected_idx[0]]
             playback_detection_video(detection, output_dir, fps)
+        fig.canvas.draw_idle()
 
     def on_click(event):
-        # If click is inside ax2, check if x coordinate falls inside any detection interval.
         if event.inaxes != ax2:
             return
         click_x = event.xdata
         for idx, (x0, x1, _) in enumerate(global_detections):
             if x0 <= click_x <= x1:
                 selected_idx[0] = idx
-                update_highlight()
+                update_selection_highlight()
                 break
 
     fig.canvas.mpl_connect("key_press_event", on_key)
     fig.canvas.mpl_connect("button_press_event", on_click)
-
-    # Initialize first selection if none.
+    # Initialize selection.
     if global_detections:
         selected_idx[0] = 0
-        update_highlight()
-
+        update_selection_highlight()
     plt.tight_layout()
     plt.show()
 
-
-def interactive_feature_wrapper(timeline, boundaries, composite_height, all_features, header, x_vals_scaled, global_detections, timeline_total_width, fps, output_dir):
-    """
-    Wraps the call to interactive_feature_plot to enable user interactivity.
-    """
-    interactive_feature_plot(timeline, boundaries, composite_height, all_features, header, x_vals_scaled, global_detections, timeline_total_width, fps, output_dir)
-
+def interactive_feature_wrapper(timeline, boundaries, composite_height, all_features, header, 
+                                 x_vals_scaled, global_detections, timeline_total_width, fps, output_dir):
+    interactive_feature_plot(timeline, boundaries, composite_height, all_features, header, 
+                              x_vals_scaled, global_detections, timeline_total_width, fps, output_dir)
+    
 def show_timeline_and_features():
     """
     Orchestrates the building and plotting of the timeline and feature graph.

@@ -7,6 +7,7 @@ app/__pycache__/
 app/movies
 app/recorded_gestures
 app/detections
+app/skipped
 
 tudor/movies
 tudor/__pycache__/

@@ -91,10 +91,11 @@ Save or Skip Detections: >
   - When pressing 's' copy all the detections marked for save to a folder called 'samples' and copy all the detections marked for skip to a folder called 'skipped'
   Where possible use functions to encapsulate the logic for each of these actions.
 
-Gesture Selection for Saving: >
-  Allow the user to select a gesture on the timeline for saving: if a gesture is selected, pressing the down arrow should mark it as saved by displaying a small green checkbox on top of that timeline segment.
-
-Saving Selected Gestures: >
-  Finally, implement the saving logic: upon pressing 'q', for all the gestures marked for saving, build filenames using the pattern gesture_<index>_<timestamp>. Save the corresponding CSV files to a folder called 'csv_samples' and the associated video segments to a folder called 'video_samples'.
+Clean-up and start a new recording session: >
+  In the interactive_feature_plot if I press 'x' I want to perform an overall clean-up:
+  - all files in the folders detections and recorded_gestures should be deleted
+  - all global detections or other global collections should be cleared to make room for a new round of recordings
+  - the entire window with the timeline and the plot should be closed
+  - is_playback is set back to False
 
 # Each of these prompts represents a step toward building the complete application gradually.
