@@ -118,4 +118,7 @@ Adjustments: >
 Show a modal window with progress bar when work is being done: >
   When the program is processing the video files or generating the CSV files, show a modal window with a progress bar that indicates the progress of the operation. The progress bar should be updated in real-time as the operation progresses. Above the progress bar it we need to see the current operation taking place like: "Generating recording CSVs", "Detect gestures in CSVs", "Save detections (as CSV and MP4)". On top of the progress bar, we should see a text like x/y where  is the current amount of files/gestures and y is the total amount of files/gestures. The modal window should prevent any other user interaction until the operation is complete.
 
+Adjustment to the progress bar: >
+  I noticed that the progress bar was not showing when the detections were being generated. I need the progress bar to show that operation too. I also want to use this modal also for 'w' operation and for 'x' operation.
+  
 # Each of these prompts represents a step toward building the complete application gradually.

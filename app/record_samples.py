@@ -906,23 +906,63 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
                 detection_states[idx] = "save"
             refresh_overlays()
         elif event.key == "w":
-            # Process: copy all detections marked for save/skip.
-            process_detection_states(global_detections, detection_states)
+            # Process: copy all detections marked save or skip
+            total = len(global_detections)
+            progress_win, label_op, label_count, progress_bar = show_progress_modal(total, "Copying detections...")
+            for idx, detection in enumerate(global_detections):
+                state = detection_states.get(idx, "none")
+                base = os.path.splitext(detection[2])[0]
+                src_csv = os.path.join(DETECTIONS_DIR, base + ".csv")
+                src_video = os.path.join(DETECTIONS_DIR, base + ".mp4")
+                if state == "save":
+                    dst_csv = os.path.join(SAMPLES_DIR, base + ".csv")
+                    dst_video = os.path.join(SAMPLES_DIR, base + ".mp4")
+                elif state in ["skip", "none"]:
+                    dst_csv = os.path.join(SKIPPED_DIR, base + ".csv")
+                    dst_video = os.path.join(SKIPPED_DIR, base + ".mp4")
+                else:
+                    continue
+                try:
+                    if os.path.exists(src_csv) and not os.path.exists(dst_csv):
+                        shutil.copy2(src_csv, dst_csv)
+                        print(f"Copied CSV: {dst_csv}")
+                except Exception as e:
+                    print(f"Error copying CSV {src_csv}: {e}")
+                try:
+                    if os.path.exists(src_video) and not os.path.exists(dst_video):
+                        shutil.copy2(src_video, dst_video)
+                        print(f"Copied video: {dst_video}")
+                except Exception as e:
+                    print(f"Error copying video {src_video}: {e}")
+                update_progress(progress_bar, label_count, idx + 1, total)
+                progress_win.update()
+            progress_win.destroy()
             show_saved_samples_window(SAMPLES_DIR, SKIPPED_DIR)
         elif event.key == "x":
-            # Overall cleanup.
-            for folder in ["detections", output_dir]:
-                for f in glob.glob(os.path.join(folder, "*")):
-                    try:
-                        os.remove(f)
-                    except Exception as e:
-                        print(f"Error deleting {f}: {e}")
+            # Cleanup operation: delete files from "detections" and the output directory.
+            folders = [DETECTIONS_DIR, output_dir]
+            all_files = []
+            for folder in folders:
+                all_files.extend(glob.glob(os.path.join(folder, "*")))
+            total = len(all_files)
+            progress_win, label_op, label_count, progress_bar = show_progress_modal(total, "Cleaning up files...")
+            current = 0
+            for f in all_files:
+                try:
+                    os.remove(f)
+                except Exception as e:
+                    print(f"Error deleting {f}: {e}")
+                current += 1
+                update_progress(progress_bar, label_count, current, total)
+                progress_win.update()
+            progress_win.destroy()
             detection_states.clear()
             del global_detections[:]
             selected_idx[0] = 0
             plt.close(fig)
             is_review = False
             print("Cleanup complete. Ready for new recordings.")
+
         elif event.key == " ":
             detection = global_detections[selected_idx[0]]
             playback_detection_video(detection, DETECTIONS_DIR, fps)
