@@ -94,6 +94,51 @@ gesture_font = cv2.FONT_HERSHEY_SIMPLEX
 
 cv2.namedWindow("Webcam Feed")
 
+def show_progress_modal(total, operation_text):
+    """
+    Create a modal progress window that:
+      - Displays the current operation (operation_text)
+      - Shows a count label "x/y"
+      - Contains a progress bar (maximum set to 'total')
+    The window is made modal by using grab_set().
+    """
+    import tkinter as tk
+    from tkinter import ttk
+    progress_win = tk.Toplevel()
+    progress_win.title("Processing...")
+    width, height = 400, 150
+    screen_width = progress_win.winfo_screenwidth()
+    screen_height = progress_win.winfo_screenheight()
+    x = (screen_width - width) // 2
+    y = (screen_height - height) // 2
+    progress_win.geometry(f"{width}x{height}+{x}+{y}")
+    progress_win.resizable(False, False)
+    
+    # Make the window modal.
+    progress_win.attributes("-topmost", True)
+    progress_win.grab_set()
+    
+    # Operation description label.
+    label_op = ttk.Label(progress_win, text=operation_text, font=("Arial", 12))
+    label_op.pack(pady=10)
+    
+    # Progress count label (e.g. "0/10")
+    label_count = ttk.Label(progress_win, text="0/{}".format(total), font=("Arial", 10))
+    label_count.pack()
+    
+    # Progress bar.
+    progress_bar = ttk.Progressbar(progress_win, orient="horizontal", mode="determinate", maximum=total, length=300)
+    progress_bar.pack(pady=10)
+    
+    progress_win.update()
+    return progress_win, label_op, label_count, progress_bar
+
+def update_progress(progress_bar, label_count, current, total):
+    """Update the progress bar value and count label."""
+    progress_bar['value'] = current
+    label_count.config(text="{}/{}".format(current, total))
+    label_count.update()
+
 def show_help_window():
     global is_paused
     is_paused = True
@@ -1148,12 +1193,19 @@ while True:
         is_paused = True
         print("Entering Review Mode...")
         file_list = get_sorted_video_file_list(RECORDINGS_DIR)
+        # Show progress modal for processing CSV generation.
+        progress_win, label_op, label_count, progress_bar = show_progress_modal(len(file_list), "Generating recording CSVs")
+        current = 0
         for f in file_list:
             if f.startswith("gesture_") and f.endswith(".mp4"):
                 video_path = os.path.join(RECORDINGS_DIR, f)
                 csv_path = os.path.splitext(video_path)[0] + ".csv"
                 if not os.path.exists(csv_path):
                     process_video_file(video_path)
+            current += 1
+            update_progress(progress_bar, label_count, current, len(file_list))
+            progress_win.update()
+        progress_win.destroy()
         print("Finished processing all gesture videos. Launching review window...")
         show_timeline_and_features()  # When review window closes, this function returns.
         is_review = False
