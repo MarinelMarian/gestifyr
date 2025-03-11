@@ -68,11 +68,28 @@ Identify significant gesture segments and create a detection: >
 Enhance detections to include state change from baseline to significant and back to baseline: >
   In the detect_fluctuations_for_feature, the detection start should actually include the previous analyzed interval. This way we'll capture the state change from baseline to significant change. In the same way, the end of the detection should include the next analyzed interval, so that we capture the state change from significant to baseline.
 
+Refactoring (first round): >
+  Time to do some refactoring:
+    - In the show_timeline_and_features method enhance the csv_info tuples to include also the gesture file name
+    - Also in there make sure that detection tuples also retain the originating gesture file name
+    - Refactor show_timeline_and_features into distinct functions
+
 Save detections: >
-  In the show_timeline_and_features (before the plotting begins), for each detection, save the cropped csv and the cropped mp4 video (according to the detection boundaries) in a folders called detections (create the folder if it doesn't exist). Use the same filenames as you used for the gestures.
+  In the show_timeline_and_features (before the plotting begins), call a function which saves the detections to a folder called "detections". This new function should take the list of detections and whatever else is necessary and for each detection, save the cropped csv and the cropped mp4 video (according to the detection boundaries) in a folders called detections (create the folder if it doesn't exist). Use the same filenames as you used for the gestures.
 
 Gesture Preview Navigation: >
-  Enhance playback mode so that the first gesture detection is highlighted with a semi-transparent green tint. When the space bar is pressed, open a separate preview window that displays the video for that particular gesture segment. Allow navigation between gesture segments using the left and right arrow keys.
+  In the monitored features plot, I want to be able to:
+  - Select a detection with the mouse or change the selection with the left or right arrow keys (if no detection is currently selected, the first detection should be selected)
+  - Playback the video of the selected detection if I press space bar. The video should be played in a separate window and auto close 1 second after the playback has stopped or if space bar is pressed.
+  Where possible use functions to encapsulate the logic for each of these actions.
+
+Save or Skip Detections: >
+  In the monitored features plot, I want to be able to:
+  - Decide to save the selected detection as a sample by pressing the down arrow key (remove any previous tint and show a green tint over the detection selected for save)
+  - Decide to not save (skip) the selected detection by pressing the up arrow key (remove any previous tint and show a grey tint over the detection selected for skip)
+  - Decide to save all detections by pressing 'a' (show a green tint over all detections)
+  - When pressing 's' copy all the detections marked for save to a folder called 'samples' and copy all the detections marked for skip to a folder called 'skipped'
+  Where possible use functions to encapsulate the logic for each of these actions.
 
 Gesture Selection for Saving: >
   Allow the user to select a gesture on the timeline for saving: if a gesture is selected, pressing the down arrow should mark it as saved by displaying a small green checkbox on top of that timeline segment.

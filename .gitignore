@@ -6,6 +6,7 @@ myenv/
 app/__pycache__/
 app/movies
 app/recorded_gestures
+app/detections
 
 tudor/movies
 tudor/__pycache__/

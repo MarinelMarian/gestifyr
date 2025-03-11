@@ -46,6 +46,18 @@ gesture_frame_count = 0
 output_dir = "recorded_gestures"
 os.makedirs(output_dir, exist_ok=True)
 
+# Create a directory to save detected gesture samples
+SAMPLES_FOLDER = "samples"
+os.makedirs(SAMPLES_FOLDER, exist_ok=True)
+
+# Global state for interactive review.
+# List of detections; each detection is (global_x0, global_x1, csv_filename)
+# obtained previously from show_timeline_and_features.
+# Here we also maintain a dictionary mapping detection index to a decision:
+#   "none" (default), "save", or "skip".
+detection_states = {}  # detection index -> state string.
+selected_detection_idx = None
+
 # Gesture cycling parameters
 GESTURE_DISPLAY_DURATION = 3.0  # seconds to display the gesture and record
 GESTURE_WAIT_DURATION = 2.0  # seconds to wait without record before next gesture
@@ -73,7 +85,6 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 gesture_font = cv2.FONT_HERSHEY_SIMPLEX
 
 cv2.namedWindow("Webcam Feed")
-
 
 def process_video_file(video_path):
     """
@@ -199,6 +210,7 @@ def detect_fluctuations_for_feature(feature_data, fps, interval_sec, threshold):
         return [(overall_start, overall_end)]
     else:
         return []    
+
 def merge_intervals(intervals):
     """
     Given a list of intervals (start, end), merge overlapping or adjacent intervals.
@@ -217,23 +229,13 @@ def merge_intervals(intervals):
             merged.append(current)
     return merged
 
-def show_timeline_and_features():
-    # Parameters for timeline images.
-    target_img_height = 80  # fixed image height
-    header_height = 10       # header space for gesture name
-    composite_height = header_height + target_img_height
-    font_face = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.33
-    thickness = 1
-    text_color = (0, 0, 0)   # black text
-
-    # Lists to store composite image info and CSV features.
-    composite_info = []      # Each entry: (composite image, video_frame_count, gesture_key)
-    csv_info = []            # Each entry: (header, data_rows)
-    segment_feature_counts = []  # Number of CSV rows per segment
-
-    # Process video files in output_dir (sorted order).
-    video_files = get_sorted_video_file_list(output_dir)
+def get_composite_info(video_files, target_img_height, header_height, font_face, font_scale, thickness, text_color):
+    """
+    Process video files to create composite images.
+    Returns a list of tuples:
+      (composite image, video_frame_count, gesture_key, filename)
+    """
+    composite_info = []
     for f in video_files:
         video_path = os.path.join(output_dir, f)
         cap_vid = cv2.VideoCapture(video_path)
@@ -245,13 +247,11 @@ def show_timeline_and_features():
         ret, frame = cap_vid.read()
         cap_vid.release()
         if ret:
-            # Resize frame to fixed target_img_height.
             h, w = frame.shape[:2]
             scale = target_img_height / h
             new_w = int(w * scale)
             resized_frame = cv2.resize(frame, (new_w, target_img_height))
-            # Create composite image: header on top and resized frame below; fill background with grey.
-            composite = np.full((composite_height, new_w, 3), 200, dtype=np.uint8)
+            composite = np.full((header_height + target_img_height, new_w, 3), 200, dtype=np.uint8)
             # Determine gesture from filename.
             base = os.path.basename(video_path)
             parts = base.split("_")
@@ -266,24 +266,26 @@ def show_timeline_and_features():
             else:
                 gesture_key = "unknown"
                 gesture_label = "Unknown"
-            # # Write the gesture label in header.
-            # (text_w, text_h), _ = cv2.getTextSize(gesture_label, font_face, font_scale, thickness)
-            # text_x = (new_w - text_w) // 2
-            # text_y = text_h
-            # cv2.putText(
-            #     composite,
-            #     gesture_label,
-            #     (text_x, text_y),
-            #     font_face,
-            #     font_scale,
-            #     text_color,
-            #     thickness,
-            #     lineType=cv2.LINE_AA,
-            # )
+            # Write the gesture label in the header.
+            (text_w, text_h), _ = cv2.getTextSize(gesture_label, font_face, font_scale, thickness)
+            text_x = (new_w - text_w) // 2
+            text_y = text_h
+            cv2.putText(composite, gesture_label, (text_x, text_y),
+                        font_face, font_scale, text_color, thickness, lineType=cv2.LINE_AA)
             # Place the resized frame below the header.
-            composite[header_height:composite_height, 0:new_w, :] = resized_frame
-            composite_info.append((composite, total_frames, gesture_key))
-        # Process corresponding CSV file.
+            composite[header_height:header_height+target_img_height, 0:new_w, :] = resized_frame
+            composite_info.append((composite, total_frames, gesture_key, f))
+    return composite_info
+
+def get_csv_info(video_files):
+    """
+    For each video file, if an accompanying CSV exists, load it.
+    Returns a list of tuples:
+      (csv_header, data_rows, filename)
+    """
+    csv_info = []
+    for f in video_files:
+        video_path = os.path.join(output_dir, f)
         csv_path = os.path.splitext(video_path)[0] + ".csv"
         if os.path.exists(csv_path):
             try:
@@ -296,21 +298,22 @@ def show_timeline_and_features():
                     for row in rows[1:]:
                         if row:
                             data_rows.append([float(val) for val in row])
-                    csv_info.append((rows[0], data_rows))
-                    segment_feature_counts.append(len(data_rows))
+                    csv_info.append((rows[0], data_rows, f))
             except Exception as e:
                 print(f"Error processing {csv_path}: {e}")
+    return csv_info
 
-    # Build timeline image.
-    timeline_total_width = 100  # overall desired minimum width
+def build_timeline(composite_info, timeline_total_width, composite_height):
+    """
+    Build the timeline image and determine vertical boundaries.
+    Returns (timeline, boundaries)
+    """
     timeline_parts = []
-    boundaries = []   # left boundary x positions (in pixels)
+    boundaries = []
     cumulative = 0
-    # Use composite_info (from video files) to set timeline width.
-    total_video_frames = sum(frames for (_, frames, _) in composite_info)
+    total_video_frames = sum(frames for (_, frames, _, _) in composite_info)
     timeline_total_width = max(timeline_total_width, total_video_frames)
-    for composite, frames, gesture_key in composite_info:
-        # Compute target width proportional to video frame count.
+    for composite, frames, _, _ in composite_info:
         target_width = int((frames / total_video_frames) * timeline_total_width)
         boundaries.append(cumulative)
         current_width = composite.shape[1]
@@ -325,97 +328,51 @@ def show_timeline_and_features():
             excess = current_width - target_width
             crop_left = excess // 2
             composite_resized = composite[:, crop_left:crop_left + target_width]
-        # Re-add gesture label (if cropping changed it)
-        gesture_label = gestures_dict[gesture_key]["name"]
-        (text_w, text_h), _ = cv2.getTextSize(gesture_label, font_face, font_scale, thickness)
-        text_x = (target_width - text_w) // 2
-        text_y = text_h
-        cv2.putText(
-            composite_resized,
-            gesture_label,
-            (text_x, text_y),
-            font_face,
-            font_scale,
-            text_color,
-            thickness,
-            lineType=cv2.LINE_AA,
-        )
+        # Re-add gesture label if needed.
+        # (Optional step if cropping alters the header.)
         timeline_parts.append(composite_resized)
         cumulative += target_width
 
-    if timeline_parts:
-        current_width = sum(part.shape[1] for part in timeline_parts)
-        if current_width < timeline_total_width:
-            filler = np.full((composite_height, timeline_total_width - current_width, 3), 200, dtype=np.uint8)
-            timeline_parts.append(filler)
-        timeline = np.hstack(timeline_parts)
-    else:
-        timeline = None
+    current_width = sum(part.shape[1] for part in timeline_parts)
+    if current_width < timeline_total_width:
+        filler = np.full((composite_height, timeline_total_width - current_width, 3), 200, dtype=np.uint8)
+        timeline_parts.append(filler)
+    timeline = np.hstack(timeline_parts) if timeline_parts else None
+    return timeline, boundaries
 
-    # Aggregate feature data from CSV files in sorted order.
+def aggregate_feature_data(csv_info):
+    """
+    Aggregate CSV feature data from all segments.
+    Returns all_features (numpy array), header (list), and segment_boundaries (list).
+    """
     all_features = []
     header = None
-    segment_boundaries = []  # cumulative boundaries of feature rows per segment
+    segment_boundaries = []
     cumulative_feat = 0
-    for i, (csv_header, data_rows) in enumerate(csv_info):
+    for csv_header, data_rows, _ in csv_info:
         all_features.extend(data_rows)
         cumulative_feat += len(data_rows)
         segment_boundaries.append(cumulative_feat)
         if header is None:
             header = csv_header
-    all_features = np.array(all_features) if all_features else None
+    if all_features:
+        all_features = np.array(all_features)
+    else:
+        all_features = None
+    return all_features, header, segment_boundaries
 
-    # Scale x-axis for features so that total time equals timeline_total_width.
-    all_features_count = len(all_features)
-    factor = timeline_total_width / (all_features_count) if all_features_count else 1
-    x_vals_scaled = [x * factor for x in range(all_features_count)] if all_features_count else []
-
-    # --- Detection of significant feature fluctuations ---
-    # For each gesture segment we now compute means over 0.5-second intervals.
-    detections = []  # Each detection is a tuple: (global_x_start, global_x_end)
-    cumulative_feat_prev = 0
-    for i, (csv_header, data_rows) in enumerate(csv_info):
-        seg_feat = np.array(data_rows)  # shape: (num_rows, num_features)
-        seg_length = seg_feat.shape[0]
-        # Compute global x offset for this segment.
-        x_offset = cumulative_feat_prev * factor
-        # Get gesture key for this segment from composite_info; assume same order.
-        if i < len(composite_info):
-            _, _, gesture_key = composite_info[i]
-        else:
-            gesture_key = "unknown"
-        segment_detections = []
-        if gesture_key in gestures_dict:
-            features_of_interest = gestures_dict[gesture_key]["features"]
-            threshold = gestures_dict[gesture_key]["threshold"]
-            # Check each feature of interest.
-            for feat_name in features_of_interest:
-                if header and feat_name in header:
-                    col = header.index(feat_name)
-                    subdata = seg_feat[:, col]
-                    # Get detections for this feature over DETECTION_INTERVAL_SEC intervals.
-                    det = detect_fluctuations_for_feature(subdata, fps, DETECTION_INTERVAL_SEC, threshold)
-                    segment_detections.extend(det)
-        # Merge detections from all features in this segment.
-        segment_detections = merge_intervals(segment_detections)
-        # Convert detection indices to global x-axis positions.
-        for (start_idx, end_idx) in segment_detections:
-            global_x0 = x_offset + start_idx * factor
-            global_x1 = x_offset + end_idx * factor
-            detections.append((global_x0, global_x1))
-        cumulative_feat_prev += seg_length
-
-
-    # --- Plotting: Create figure and maximize window (Windows-specific). ---
-    fig, (ax1, ax2) = plt.subplots(2, 1, 
-        gridspec_kw={"height_ratios": [1, 2]}, figsize=(14, 8))
+def plot_timeline_and_features(timeline, boundaries, composite_height, all_features, header, x_vals_scaled, detections, timeline_total_width):
+    """
+    Plot the timeline and monitored features with detections.
+    """
+    fig, (ax1, ax2) = plt.subplots(2, 1, gridspec_kw={"height_ratios": [1, 2]}, figsize=(14, 8))
     mng = plt.get_current_fig_manager()
     try:
         mng.window.state("zoomed")
     except Exception:
         mng.resize(1400, 1000)
 
-    # Plot timeline (top axes):
+    # Plot timeline
     if timeline is not None:
         timeline_rgb = cv2.cvtColor(timeline, cv2.COLOR_BGR2RGB)
         ax1.imshow(timeline_rgb, extent=[0, timeline_total_width, 0, composite_height])
@@ -428,24 +385,20 @@ def show_timeline_and_features():
         ax1.text(0.5, 0.5, "No timeline available", ha="center", va="center")
         ax1.axis("off")
 
-    # Plot monitored features (bottom axes) using the scaled x-values.
+    # Plot features
     if all_features is not None:
         num_features = all_features.shape[1]
         for i in range(num_features):
-            ax2.plot(
-                x_vals_scaled,
-                all_features[:, i],
-                label=header[i] if header is not None else f"F{i}",
-            )
+            ax2.plot(x_vals_scaled, all_features[:, i],
+                     label=header[i] if header is not None else f"F{i}")
         ax2.set_xlabel("Time (scaled to timeline)")
         ax2.set_title("Monitored Features")
         ax2.legend(loc="lower right")
         ax2.set_xlim(0, timeline_total_width)
-        # Draw vertical grey delimiters on the feature plot as well.
         for b in boundaries:
             ax2.axvline(x=b, color="grey", linewidth=0.5)
-        # Draw blue overlay rectangles corresponding to detections.
-        for (x0, x1) in detections:
+        # Draw blue overlay for detections.
+        for (x0, x1, fname) in detections:
             ax2.axvspan(x0, x1, color="blue", alpha=0.2)
     else:
         ax2.text(0.5, 0.5, "No feature data available", ha="center", va="center")
@@ -453,6 +406,377 @@ def show_timeline_and_features():
 
     plt.tight_layout()
     plt.show()
+
+def build_detections(csv_info, composite_info, fps, detection_interval):
+    """
+    For each CSV segment, detect significant fluctuations from the features of
+    interest defined in gestures_dict. Each detection tuple (in CSV row indices)
+    is augmented with the originating gesture file name and the segment's offset.
+    Returns a list of detections:
+         (csv_filename, start_idx, end_idx, seg_offset)
+    """
+    detections = []
+    cumulative_feat_prev = 0
+    for i, (csv_header, data_rows, csv_filename) in enumerate(csv_info):
+        seg_feat = np.array(data_rows)
+        seg_length = seg_feat.shape[0]
+        if i < len(composite_info):
+            _, _, gesture_key, file_name = composite_info[i]
+        else:
+            gesture_key = "unknown"
+            file_name = "unknown"
+        segment_detections = []
+        if gesture_key in gestures_dict:
+            features_of_interest = gestures_dict[gesture_key]["features"]
+            threshold = gestures_dict[gesture_key]["threshold"]
+            for feat_name in features_of_interest:
+                if csv_header and feat_name in csv_header:
+                    col = csv_header.index(feat_name)
+                    subdata = seg_feat[:, col]
+                    det = detect_fluctuations_for_feature(subdata, fps, detection_interval, threshold)
+                    segment_detections.extend(det)
+        segment_detections = merge_intervals(segment_detections)
+        for (start_idx, end_idx) in segment_detections:
+            detections.append((csv_filename, start_idx, end_idx, cumulative_feat_prev))
+        cumulative_feat_prev += seg_length
+    return detections
+
+def save_detections(detections, output_dir):
+    """
+    Given a list of detections (each a tuple: (csv_filename, start_idx, end_idx, seg_offset)),
+    for each detection, crop the corresponding CSV and MP4 files and save
+    them to a folder called "detections". The cropped files use the same base filename
+    as the original gesture files with an added _detection marker.
+    """
+    det_folder = "detections"
+    os.makedirs(det_folder, exist_ok=True)
+    for (csv_fname, start_idx, end_idx, seg_offset) in detections:
+        # The original CSV and video files are in the output directory.
+        base = os.path.splitext(csv_fname)[0]
+        csv_path = os.path.join(output_dir, base + ".csv")
+        video_path = os.path.join(output_dir, base + ".mp4")
+        # Crop the CSV.
+        try:
+            with open(csv_path, "r") as f_csv:
+                reader = list(csv.reader(f_csv))
+            header_line = reader[0]
+            data_rows = reader[1:]
+            cropped_data = data_rows[start_idx : end_idx + 1]
+            cropped_csv_path = os.path.join(det_folder, base + f"_detection_{start_idx}_{end_idx}.csv")
+            with open(cropped_csv_path, "w", newline="") as f_out:
+                writer = csv.writer(f_out)
+                writer.writerow(header_line)
+                writer.writerows(cropped_data)
+            print(f"Saved detection CSV: {cropped_csv_path}")
+        except Exception as e:
+            print(f"Error cropping CSV {csv_path}: {e}")
+        # Crop the video.
+        cap_vid = cv2.VideoCapture(video_path)
+        if not cap_vid.isOpened():
+            print(f"Error opening video for detection: {video_path}")
+            continue
+        total_frames = int(cap_vid.get(cv2.CAP_PROP_FRAME_COUNT))
+        # We assume here that the number of CSV rows equals the number of frames.
+        start_frame = start_idx
+        end_frame = min(end_idx, total_frames - 1)
+        ret, frame = cap_vid.read()
+        if not ret:
+            cap_vid.release()
+            continue
+        h, w = frame.shape[:2]
+        fourcc = cv2.VideoWriter_fourcc(*"mp42")
+        fps_vid = cap_vid.get(cv2.CAP_PROP_FPS)
+        cropped_video_path = os.path.join(det_folder, base + f"_detection_{start_idx}_{end_idx}.mp4")
+        writer = cv2.VideoWriter(cropped_video_path, fourcc, fps_vid, (w, h))
+        cap_vid.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+        for fnum in range(start_frame, end_frame + 1):
+            ret, frame = cap_vid.read()
+            if not ret:
+                break
+            writer.write(frame)
+        writer.release()
+        cap_vid.release()
+        print(f"Saved detection video: {cropped_video_path}")
+
+def build_detections(csv_info, composite_info, fps, detection_interval):
+    """
+    For each CSV segment, detect significant fluctuations from the features of
+    interest defined in gestures_dict. Each detection tuple (in CSV row indices)
+    is augmented with the originating gesture file name and the segment's offset.
+    Returns a list of detections:
+         (csv_filename, start_idx, end_idx, seg_offset)
+    """
+    detections = []
+    cumulative_feat_prev = 0
+    for i, (csv_header, data_rows, csv_filename) in enumerate(csv_info):
+        seg_feat = np.array(data_rows)
+        seg_length = seg_feat.shape[0]
+        if i < len(composite_info):
+            _, _, gesture_key, file_name = composite_info[i]
+        else:
+            gesture_key = "unknown"
+            file_name = "unknown"
+        segment_detections = []
+        if gesture_key in gestures_dict:
+            features_of_interest = gestures_dict[gesture_key]["features"]
+            threshold = gestures_dict[gesture_key]["threshold"]
+            for feat_name in features_of_interest:
+                if csv_header and feat_name in csv_header:
+                    col = csv_header.index(feat_name)
+                    subdata = seg_feat[:, col]
+                    det = detect_fluctuations_for_feature(subdata, fps, detection_interval, threshold)
+                    segment_detections.extend(det)
+        segment_detections = merge_intervals(segment_detections)
+        for (start_idx, end_idx) in segment_detections:
+            detections.append((csv_filename, start_idx, end_idx, cumulative_feat_prev))
+        cumulative_feat_prev += seg_length
+    return detections
+
+def save_detections(detections, output_dir):
+    """
+    Given a list of detections (each a tuple: (csv_filename, start_idx, end_idx, seg_offset)),
+    for each detection, crop the corresponding CSV and MP4 files and save
+    them to a folder called "detections". The cropped files use the same base filename
+    as the original gesture files with an added _detection marker.
+    """
+    det_folder = "detections"
+    os.makedirs(det_folder, exist_ok=True)
+    for (csv_fname, start_idx, end_idx, seg_offset) in detections:
+        # The original CSV and video files are in the output directory.
+        base = os.path.splitext(csv_fname)[0]
+        csv_path = os.path.join(output_dir, base + ".csv")
+        video_path = os.path.join(output_dir, base + ".mp4")
+
+        if not os.path.exists(csv_path):
+            # Crop the CSV.
+            try:
+                with open(csv_path, "r") as f_csv:
+                    reader = list(csv.reader(f_csv))
+                header_line = reader[0]
+                data_rows = reader[1:]
+                cropped_data = data_rows[start_idx : end_idx + 1]
+                cropped_csv_path = os.path.join(det_folder, base + f"_detection_{start_idx}_{end_idx}.csv")
+                with open(cropped_csv_path, "w", newline="") as f_out:
+                    writer = csv.writer(f_out)
+                    writer.writerow(header_line)
+                    writer.writerows(cropped_data)
+                print(f"Saved detection CSV: {cropped_csv_path}")
+            except Exception as e:
+                print(f"Error cropping CSV {csv_path}: {e}")
+
+        if not os.path.exists(video_path):
+            # Crop the video.
+            cap_vid = cv2.VideoCapture(video_path)
+            if not cap_vid.isOpened():
+                print(f"Error opening video for detection: {video_path}")
+                continue
+            total_frames = int(cap_vid.get(cv2.CAP_PROP_FRAME_COUNT))
+            # We assume here that the number of CSV rows equals the number of frames.
+            start_frame = start_idx
+            end_frame = min(end_idx, total_frames - 1)
+            ret, frame = cap_vid.read()
+            if not ret:
+                cap_vid.release()
+                continue
+            h, w = frame.shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*"mp42")
+            fps_vid = cap_vid.get(cv2.CAP_PROP_FPS)
+            cropped_video_path = os.path.join(det_folder, base + f"_detection_{start_idx}_{end_idx}.mp4")
+            writer = cv2.VideoWriter(cropped_video_path, fourcc, fps_vid, (w, h))
+            cap_vid.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+            for fnum in range(start_frame, end_frame + 1):
+                ret, frame = cap_vid.read()
+                if not ret:
+                    break
+                writer.write(frame)
+            writer.release()
+            cap_vid.release()
+            print(f"Saved detection video: {cropped_video_path}")
+
+def playback_detection_video(detection, output_dir, fps):
+    """
+    Given a detection tuple (global_x0, global_x1, csv_filename) play
+    the corresponding video (derived from the CSV filename) in a separate window.
+    The video playback auto-closes 1 second after the video ends or if space is pressed.
+    """
+    # Derive video filename; assume CSV filename has the same base name.
+    csv_fname = detection[2]
+    base = os.path.splitext(csv_fname)[0]
+    video_path = os.path.join(output_dir, base + ".mp4")
+    cap_vid = cv2.VideoCapture(video_path)
+    if not cap_vid.isOpened():
+        print("Error opening video for detection:", video_path)
+        return
+    window_name = "Detection Playback"
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    # Playback loop.
+    while True:
+        ret, frame = cap_vid.read()
+        if not ret:
+            break
+        cv2.imshow(window_name, frame)
+        # Wait 30ms per frame; if space is pressed, break playback early.
+        key = cv2.waitKey(30) & 0xFF
+        if key == ord(" "):
+            break
+    # Auto-close window 1 second after playback stops.
+    cv2.waitKey(1000)
+    cap_vid.release()
+    cv2.destroyWindow(window_name)
+
+
+def interactive_feature_plot(timeline, boundaries, composite_height, all_features, header, x_vals_scaled, global_detections, timeline_total_width, fps, output_dir):
+    """
+    Creates the interactive figure with timeline (ax1) and monitored features (ax2).
+    Allows mouse click selection or left/right arrow keys to change the selected detection.
+    Pressing space in this figure will play the corresponding detection video.
+    """
+    fig, (ax1, ax2) = plt.subplots(2, 1, gridspec_kw={"height_ratios": [1, 2]}, figsize=(14, 8))
+    mng = plt.get_current_fig_manager()
+    try:
+        mng.window.state("zoomed")
+    except Exception:
+        mng.resize(1400, 1000)
+
+    # Plot timeline (ax1)
+    if timeline is not None:
+        timeline_rgb = cv2.cvtColor(timeline, cv2.COLOR_BGR2RGB)
+        ax1.imshow(timeline_rgb, extent=[0, timeline_total_width, 0, composite_height])
+        ax1.set_xlim([0, timeline_total_width])
+        ax1.axis("off")
+        ax1.set_title("Timeline of Recorded Gestures")
+        for b in boundaries:
+            ax1.axvline(x=b, color="grey", linewidth=0.5)
+    else:
+        ax1.text(0.5, 0.5, "No timeline available", ha="center", va="center")
+        ax1.axis("off")
+
+    # Plot monitored features (ax2)
+    if all_features is not None:
+        num_features = all_features.shape[1]
+        for i in range(num_features):
+            ax2.plot(x_vals_scaled, all_features[:, i],
+                     label=header[i] if header is not None else f"F{i}")
+        ax2.set_xlabel("Time (scaled to timeline)")
+        ax2.set_title("Monitored Features (Click/Arrow to select, Space to playback)")
+        ax2.legend(loc="lower right")
+        ax2.set_xlim(0, timeline_total_width)
+        for b in boundaries:
+            ax2.axvline(x=b, color="grey", linewidth=0.5)
+        # Draw blue overlay for all detections.
+        for (x0, x1, fname) in global_detections:
+            ax2.axvspan(x0, x1, color="blue", alpha=0.2)
+    else:
+        ax2.text(0.5, 0.5, "No feature data available", ha="center", va="center")
+        ax2.axis("off")
+
+    # We will highlight the selected detection by drawing a red overlay.
+    selected_idx = [0]  # mutable container to hold currently selected detection index.
+    highlight_patch = [None]  # to store reference to the drawn patch
+
+    def update_highlight():
+        """Remove existing highlight and add a new one for the currently selected detection."""
+        if highlight_patch[0] is not None:
+            highlight_patch[0].remove()
+        if global_detections and (0 <= selected_idx[0] < len(global_detections)):
+            x0, x1, _ = global_detections[selected_idx[0]]
+            # Draw a red semi-transparent overlay.
+            highlight_patch[0] = ax2.axvspan(x0, x1, color="blue", alpha=0.3)
+            fig.canvas.draw_idle()
+
+    def on_key(event):
+        # Handle left/right arrow keys for selection and space bar for playback.
+        if not global_detections:
+            return
+        if event.key == "left":
+            selected_idx[0] = max(0, selected_idx[0] - 1)
+            update_highlight()
+        elif event.key == "right":
+            selected_idx[0] = min(len(global_detections) - 1, selected_idx[0] + 1)
+            update_highlight()
+        elif event.key == " ":
+            # Playback the selected detection.
+            detection = global_detections[selected_idx[0]]
+            playback_detection_video(detection, output_dir, fps)
+
+    def on_click(event):
+        # If click is inside ax2, check if x coordinate falls inside any detection interval.
+        if event.inaxes != ax2:
+            return
+        click_x = event.xdata
+        for idx, (x0, x1, _) in enumerate(global_detections):
+            if x0 <= click_x <= x1:
+                selected_idx[0] = idx
+                update_highlight()
+                break
+
+    fig.canvas.mpl_connect("key_press_event", on_key)
+    fig.canvas.mpl_connect("button_press_event", on_click)
+
+    # Initialize first selection if none.
+    if global_detections:
+        selected_idx[0] = 0
+        update_highlight()
+
+    plt.tight_layout()
+    plt.show()
+
+
+def interactive_feature_wrapper(timeline, boundaries, composite_height, all_features, header, x_vals_scaled, global_detections, timeline_total_width, fps, output_dir):
+    """
+    Wraps the call to interactive_feature_plot to enable user interactivity.
+    """
+    interactive_feature_plot(timeline, boundaries, composite_height, all_features, header, x_vals_scaled, global_detections, timeline_total_width, fps, output_dir)
+
+def show_timeline_and_features():
+    """
+    Orchestrates the building and plotting of the timeline and feature graph.
+    CSV info tuples now include the originating gesture file name, and
+    detection tuples also include that name.
+    BEFORE plotting, call save_detections to save cropped CSV and video files of
+    each detection in a folder called "detections".
+    Then display an interactive feature plot that allows selection and playback.
+    """
+    target_img_height = 80
+    header_height = 10
+    composite_height = header_height + target_img_height
+    font_face = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale_val = 0.33
+    thickness = 1
+    text_color = (0, 0, 0)
+    timeline_min_width = 100
+
+    video_files = get_sorted_video_file_list(output_dir)
+    composite_info = get_composite_info(video_files, target_img_height, header_height,
+                                        font_face, font_scale_val, thickness, text_color)
+    csv_info = get_csv_info(video_files)
+    
+    # Build timeline image.
+    total_video_frames = sum(frames for (_, frames, _, _) in composite_info)
+    timeline_total_width = max(timeline_min_width, total_video_frames)
+    timeline, boundaries = build_timeline(composite_info, timeline_total_width, composite_height)
+    
+    # Aggregate feature data.
+    all_features, header, segment_boundaries = aggregate_feature_data(csv_info)
+    all_features_count = len(all_features) if all_features is not None else 0
+    factor = timeline_total_width / all_features_count if all_features_count else 1
+    x_vals_scaled = [x * factor for x in range(all_features_count)] if all_features_count else []
+    
+    # Detect fluctuations in each segment.
+    detection_interval = DETECTION_INTERVAL_SEC  # e.g., 0.5 sec
+    raw_detections = build_detections(csv_info, composite_info, fps, detection_interval)
+    # Save the detections (cropped CSV & video) in folder "detections".
+    save_detections(raw_detections, output_dir)
+    
+    # Convert raw_detections (with CSV row indices) into global x–coordinates for plotting.
+    global_detections = []
+    for (csv_fname, start_idx, end_idx, seg_offset) in raw_detections:
+        global_x0 = (seg_offset + start_idx) * factor
+        global_x1 = (seg_offset + end_idx) * factor
+        global_detections.append((global_x0, global_x1, csv_fname))
+    
+    # Now, call the interactive feature plot that enables selection and playback.
+    interactive_feature_wrapper(timeline, boundaries, composite_height, all_features, header, x_vals_scaled, global_detections, timeline_total_width, fps, output_dir)    
 
 def draw_play_pause_symbol(frame, is_paused):
     """
