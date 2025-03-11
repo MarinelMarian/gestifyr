@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import csv
 from PIL import ImageFont, ImageDraw, Image
 import shutil
+import glob
+
 
 from videoProcessingTools import get_angles
 from mediapipe_extract import extract_features_v2
@@ -80,7 +82,7 @@ fourcc = cv2.VideoWriter_fourcc(*"mp42")  # avc1 works on MacOS, mp4v works on W
 # When video is paused, show PLAY symbol and state is_paused True;
 # when playing, show PAUSE symbol.
 is_paused = True
-is_playback = False
+is_review = False
 
 font = cv2.FONT_HERSHEY_SIMPLEX
 gesture_font = cv2.FONT_HERSHEY_SIMPLEX
@@ -699,6 +701,9 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
     """
     fig, (ax1, ax2) = plt.subplots(2, 1, 
           gridspec_kw={"height_ratios": [1, 2]}, figsize=(14, 8))
+    
+    # Set the window title to "Review"
+    fig.canvas.manager.set_window_title("Review")
     mng = plt.get_current_fig_manager()
     try:
         mng.window.state("zoomed")
@@ -725,7 +730,7 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
             ax2.plot(x_vals_scaled, all_features[:, i],
                      label=header[i] if header is not None else f"F{i}")
         ax2.set_xlabel("Time (scaled to timeline)")
-        ax2.set_title("Monitored Features (Click/Arrow to select, Space to playback)")
+        ax2.set_title("Monitored Features")
         ax2.legend(loc="lower right")
         ax2.set_xlim(0, timeline_total_width)
         for b in boundaries:
@@ -733,6 +738,12 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
     else:
         ax2.text(0.5, 0.5, "No feature data available", ha="center", va="center")
         ax2.axis("off")
+
+    # Add text box listing key actions.
+    instructions = ("Keys: Left/Right: Select | Space: Playback | Down: Save | Up: Skip | "
+                    "'a': Save All | 'w': Write | 'x': Cleanup")
+    ax2.text(0.5, -0.1, instructions,
+             transform=ax2.transAxes, ha="center", fontsize=10, color="black")
 
     # Draw detection overlays based on detection_states.
     # detection_states is a global dict: detection index -> state ("none", "save", "skip").
@@ -755,6 +766,7 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
         if global_detections and 0 <= selected_idx[0] < len(global_detections):
             x0, x1, _ = global_detections[selected_idx[0]]
             highlight_patch[0] = ax2.axvspan(x0, x1, color="black", alpha=0.3)
+
         fig.canvas.draw_idle()
 
     def refresh_overlays():
@@ -763,6 +775,7 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
         fig.canvas.draw_idle()
 
     def on_key(event):
+        global is_review
         # Left/Right: change selection.
         if not global_detections:
             return
@@ -797,6 +810,25 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
             # Playback selected detection.
             detection = global_detections[selected_idx[0]]
             playback_detection_video(detection, output_dir, fps)
+        elif event.key == "x":
+            # Overall cleanup: delete all files from detections and output_dir.
+            # Delete all files in folder "detections".
+            for folder in ["detections", output_dir]:
+                files = glob.glob(os.path.join(folder, "*"))
+                for f in files:
+                    try:
+                        os.remove(f)
+                    except Exception as e:
+                        print(f"Error deleting {f}: {e}")
+            # Clear global detection collections.
+            detection_states.clear()
+            del global_detections[:]
+            # Optionally clear any other global states (like selected index).
+            selected_idx[0] = 0
+            # Close the interactive window.
+            plt.close(fig)
+            is_review = False
+            print("Cleanup complete. Ready for new recordings.")
         fig.canvas.draw_idle()
 
     def on_click(event):
@@ -924,8 +956,8 @@ while True:
         print("Error: Could not read frame.")
         break
 
-    # Normal mode (not paused / not in playback)
-    if not is_playback:
+    # Normal mode (not paused / not in review mode).
+    if not is_review:
         # Check pause state. When paused, simply use the frozen frame.
         if is_paused:
             pass  # do nothing extra for paused state
@@ -940,14 +972,14 @@ while True:
                     temp_timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                     temp_filename = os.path.join(
                         output_dir,
-                        f"temp_gesture_{current_gesture_index}_{temp_timestamp}.mp4",
+                        f"temp_gesture_{current_gesture_index}_{round(fps)}_{temp_timestamp}.mp4",
                     )
                     with open(os.devnull, "w") as devnull, redirect_stderr(devnull):
                         video_writer = cv2.VideoWriter(
                             temp_filename, fourcc, fps, (frame_width, frame_height)
                         )
                     gesture_frame_count = 0
-                    print(f"Recording gesture {gestures_dict[GESTURES[current_gesture_index]]["name"]}...")
+                    print(f"Recording gesture {gestures_dict[GESTURES[current_gesture_index]]['name']}...")
 
                 if video_writer is not None:
                     video_writer.write(frame)
@@ -999,16 +1031,14 @@ while True:
                     if video_writer is not None:
                         video_writer.release()
                         video_writer = None
-                        final_timestamp = dt.datetime.now().strftime(
-                            "%Y-%m-%d_%H-%M-%S"
-                        )
+                        final_timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                         temp_file = os.path.join(
                             output_dir,
-                            f"temp_gesture_{current_gesture_index}_{temp_timestamp}.mp4",
+                            f"temp_gesture_{current_gesture_index}_{round(fps)}_{temp_timestamp}.mp4",
                         )
                         final_file = os.path.join(
                             output_dir,
-                            f"gesture_{current_gesture_index}_{gesture_frame_count}_{final_timestamp}.mp4",
+                            f"gesture_{current_gesture_index}_{round(fps)}_{final_timestamp}.mp4",
                         )
                         os.rename(temp_file, final_file)
                         print(f"Saved recording: {final_file}")
@@ -1052,13 +1082,12 @@ while True:
             gesture_phase = "display"
             gesture_phase_start = time.time()
         print("Paused." if is_paused else "Resumed.")
-    elif key == ord("p"):
-        # Enter playback mode. In playback mode, process each gesture video file.
-        is_playback = not is_playback
+    elif key == ord("r"):
+        # Enter review mode. In review mode, process each gesture video file.
+        is_review = True
         is_paused = True
-        if is_playback:
-            print("Paused.")
-            print("Entering Playback Mode...")
+        if is_review:
+            print("Entering Review Mode...")
             file_list = get_sorted_video_file_list(output_dir)
             for f in file_list:
                 if f.startswith("gesture_") and f.endswith(".mp4"):
@@ -1066,7 +1095,7 @@ while True:
                     csv_path = os.path.splitext(video_path)[0] + ".csv"
                     if not os.path.exists(csv_path):
                         process_video_file(video_path)
-            print("Finished processing all gesture videos. Exiting Playback Mode.")
+            print("Finished processing all gesture videos. Exiting Review Mode.")
 
             # After processing, display timeline and feature plot.
             show_timeline_and_features()

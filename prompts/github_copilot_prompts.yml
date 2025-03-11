@@ -98,4 +98,22 @@ Clean-up and start a new recording session: >
   - the entire window with the timeline and the plot should be closed
   - is_playback is set back to False
 
+Refactoring (second round): >
+  Time to do some refactoring:
+    - The gesture file names should be of the form gesture_<gesture index>_<rounded fps>_<timestamp in the format %Y-%m-%d_%H-%M-%S>.<extension>
+    - The is_playback flag should be renamed to is_review
+    - While in review mode, the main window with the webcam feed should display "Switch to Review" instead of "Play" and "Pause"
+    - The window with the timeline and the plot should have a title "Review"
+    - To the bottom of the plot add a text box with the name of the current gesture
+    - Below this, add another text box with all the keys and their actions
+
+Adjustments: >
+  More adjustments:
+  - In the main loop if h is pressed, the program should display a help window with all the available keys and their actions. If any other key is pressed while the help window is open, the help window should close.
+  - If the window with the timeline and the plot is closed while in review mode, the program should return to the main window with the webcam feed and set is_review to False
+  - If the window with the webcam feed is closed, the program should exit
+  - Instead of the play symbol, display the arial unicode symbol a full circle with the color red symbolizing the recording state
+  - When in review mode, if 'w' is pressed, the program should display a window with the list of all the saved samples and skipped samples. The window should have a title "Saved Samples" and display the list of saved samples on the left and the list of skipped samples on the right. Each list should have a scrollbar if the number of samples exceeds the window size.
+
+
 # Each of these prompts represents a step toward building the complete application gradually.
