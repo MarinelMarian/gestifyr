@@ -25,6 +25,7 @@ APP_REL_PATH = os.getenv("APP_REL_PATH") or "app/"
 WEBCAM_INDEX = int(os.getenv("WEBCAM_INDEX") or 0) 
 DETECTION_INTERVAL_SEC = float(os.getenv("DETECTION_INTERVAL_SEC") or 0.25)
 VIDEO_ENCODER_FOURCC = os.getenv("VIDEO_ENCODER_FOURCC") or "mp42" # "mp4v" for Windows, "avc1" for MacOS
+SKIP_PROGRESSBAR_WINDOWS = int(os.getenv("SKIP_PROGRESSBAR_WINDOWS") or 0) 
 
 # Set current working directory to the app folder
 os.chdir(BASE_PATH + APP_REL_PATH)
@@ -83,7 +84,7 @@ if not cap.isOpened():
 frame_width = int(cap.get(3))
 frame_height = int(cap.get(4))
 fps = cap.get(cv2.CAP_PROP_FPS)
-fourcc = cv2.VideoWriter_fourcc(*"VIDEO_ENCODER_FOURCC")  # avc1 works on MacOS, mp4v works on Windows
+fourcc = cv2.VideoWriter_fourcc(*VIDEO_ENCODER_FOURCC)  # avc1 works on MacOS, mp4v works on Windows
 
 # When video is paused, show PLAY symbol and state is_paused True;
 # when playing, show PAUSE symbol.
@@ -659,7 +660,7 @@ def save_detections(detections, output_dir, det_folder):
                 cap_vid.release()
                 continue
             h, w = frame.shape[:2]
-            fourcc = cv2.VideoWriter_fourcc(*"VIDEO_ENCODER_FOURCC")
+            fourcc = cv2.VideoWriter_fourcc(*VIDEO_ENCODER_FOURCC)
             fps_vid = cap_vid.get(cv2.CAP_PROP_FPS)
                                                                                                      
             writer = cv2.VideoWriter(dest_video_path, fourcc, fps_vid, (w, h))
@@ -909,7 +910,8 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
         elif event.key == "w":
             # Process: copy all detections marked save or skip
             total = len(global_detections)
-            progress_win, label_op, label_count, progress_bar = show_progress_modal(total, "Copying detections...")
+            if not SKIP_PROGRESSBAR_WINDOWS:
+                progress_win, label_op, label_count, progress_bar = show_progress_modal(total, "Copying detections...")
             for idx, detection in enumerate(global_detections):
                 state = detection_states.get(idx, "none")
                 base = os.path.splitext(detection[2])[0]
@@ -935,9 +937,11 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
                         print(f"Copied video: {dst_video}")
                 except Exception as e:
                     print(f"Error copying video {src_video}: {e}")
-                update_progress(progress_bar, label_count, idx + 1, total)
-                progress_win.update()
-            progress_win.destroy()
+                if not SKIP_PROGRESSBAR_WINDOWS:
+                    update_progress(progress_bar, label_count, idx + 1, total)
+                    progress_win.update()
+            if not SKIP_PROGRESSBAR_WINDOWS:
+                progress_win.destroy()
             show_saved_samples_window(SAMPLES_DIR, SKIPPED_DIR)
         elif event.key == "x":
             # Cleanup operation: delete files from "detections" and the output directory.
@@ -946,7 +950,8 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
             for folder in folders:
                 all_files.extend(glob.glob(os.path.join(folder, "*")))
             total = len(all_files)
-            progress_win, label_op, label_count, progress_bar = show_progress_modal(total, "Cleaning up files...")
+            if not SKIP_PROGRESSBAR_WINDOWS:
+                progress_win, label_op, label_count, progress_bar = show_progress_modal(total, "Cleaning up files...")
             current = 0
             for f in all_files:
                 try:
@@ -954,16 +959,17 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
                 except Exception as e:
                     print(f"Error deleting {f}: {e}")
                 current += 1
-                update_progress(progress_bar, label_count, current, total)
-                progress_win.update()
-            progress_win.destroy()
+                if not SKIP_PROGRESSBAR_WINDOWS:
+                    update_progress(progress_bar, label_count, current, total)
+                    progress_win.update()
+            if not SKIP_PROGRESSBAR_WINDOWS:
+                progress_win.destroy()
             detection_states.clear()
             del global_detections[:]
             selected_idx[0] = 0
             plt.close(fig)
             is_review = False
             print("Cleanup complete. Ready for new recordings.")
-
         elif event.key == " ":
             detection = global_detections[selected_idx[0]]
             playback_detection_video(detection, DETECTIONS_DIR, fps)
@@ -1234,8 +1240,8 @@ while True:
         is_paused = True
         print("Entering Review Mode...")
         file_list = get_sorted_video_file_list(RECORDINGS_DIR)
-        # Show progress modal for processing CSV generation.
-        progress_win, label_op, label_count, progress_bar = show_progress_modal(len(file_list), "Generating recording CSVs")
+        if not SKIP_PROGRESSBAR_WINDOWS:
+            progress_win, label_op, label_count, progress_bar = show_progress_modal(len(file_list), "Generating recording CSVs")
         current = 0
         for f in file_list:
             if f.startswith("gesture_") and f.endswith(".mp4"):
@@ -1244,12 +1250,14 @@ while True:
                 if not os.path.exists(csv_path):
                     process_video_file(video_path)
             current += 1
-            update_progress(progress_bar, label_count, current, len(file_list))
-            progress_win.update()
-        progress_win.destroy()
+            if not SKIP_PROGRESSBAR_WINDOWS:
+                update_progress(progress_bar, label_count, current, len(file_list))
+                progress_win.update()
+        if not SKIP_PROGRESSBAR_WINDOWS:
+            progress_win.destroy()
         print("Finished processing all gesture videos. Launching review window...")
-        show_timeline_and_features()  # When review window closes, this function returns.
-        is_review = False
+        show_timeline_and_features()  # review window
+        is_review = False    
     elif key == ord("q") or key == 27:
         break
 
