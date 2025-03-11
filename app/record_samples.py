@@ -1,5 +1,6 @@
 import json
 from contextlib import redirect_stderr
+import PySide6
 import cv2
 import numpy as np
 import datetime as dt
@@ -12,6 +13,8 @@ import shutil
 import glob
 import tkinter as tk
 from tkinter import ttk
+from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QProgressBar, QListWidget, QPushButton
+import sys
 
 
 from videoProcessingTools import get_angles
@@ -98,48 +101,43 @@ cv2.namedWindow("Webcam Feed")
 
 def show_progress_modal(total, operation_text):
     """
-    Create a modal progress window that:
+    Create a modal progress window using PySide6 that:
       - Displays the current operation (operation_text)
       - Shows a count label "x/y"
       - Contains a progress bar (maximum set to 'total')
-    The window is made modal by using grab_set().
     """
-    import tkinter as tk
-    from tkinter import ttk
-    progress_win = tk.Toplevel()
-    progress_win.title("Processing...")
-    width, height = 400, 150
-    screen_width = progress_win.winfo_screenwidth()
-    screen_height = progress_win.winfo_screenheight()
-    x = (screen_width - width) // 2
-    y = (screen_height - height) // 2
-    progress_win.geometry(f"{width}x{height}+{x}+{y}")
-    progress_win.resizable(False, False)
+    # Ensure a QApplication instance exists.
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+    dialog = QDialog()
+    dialog.setWindowTitle("Processing...")
+    dialog.setModal(True)
+    layout = QVBoxLayout()
     
-    # Make the window modal.
-    progress_win.attributes("-topmost", True)
-    progress_win.grab_set()
+    label_op = QLabel(operation_text)
+    layout.addWidget(label_op)
     
-    # Operation description label.
-    label_op = ttk.Label(progress_win, text=operation_text, font=("Arial", 12))
-    label_op.pack(pady=10)
+    label_count = QLabel("0/{}".format(total))
+    layout.addWidget(label_count)
     
-    # Progress count label (e.g. "0/10")
-    label_count = ttk.Label(progress_win, text="0/{}".format(total), font=("Arial", 10))
-    label_count.pack()
+    progress_bar = QProgressBar()
+    progress_bar.setOrientation(PySide6.QtCore.Qt.Horizontal)  # Horizontal
+    progress_bar.setMaximum(total)
+    progress_bar.setValue(0)
+    layout.addWidget(progress_bar)
     
-    # Progress bar.
-    progress_bar = ttk.Progressbar(progress_win, orient="horizontal", mode="determinate", maximum=total, length=300)
-    progress_bar.pack(pady=10)
-    
-    progress_win.update()
-    return progress_win, label_op, label_count, progress_bar
+    dialog.setLayout(layout)
+    dialog.resize(400, 150)
+    dialog.show()
+    app.processEvents()  # Ensure the dialog appears
+    return dialog, label_op, label_count, progress_bar
 
 def update_progress(progress_bar, label_count, current, total):
-    """Update the progress bar value and count label."""
-    progress_bar['value'] = current
-    label_count.config(text="{}/{}".format(current, total))
-    label_count.update()
+    """Update the progress bar value and count label using PySide6."""
+    progress_bar.setValue(current)
+    label_count.setText("{}/{}".format(current, total))
+    QApplication.processEvents()
 
 def show_help_window():
     global is_paused
@@ -203,45 +201,45 @@ def show_help_window():
 
 def show_saved_samples_window(samples_folder, skipped_folder):
     """
-    Display a Tkinter window titled "Saved Samples" that lists the saved samples
-    (files in the 'samples' folder) on the left and the skipped samples (files in the
-    'skipped' folder) on the right. Each listbox is scrollable.
-    The window will close if any key is pressed.
+    Create a PySide6 modal dialog titled "Saved Samples" that lists the saved samples
+    (files in the 'samples' folder) and skipped samples (files in the 'skipped' folder).
+    The dialog closes when the user clicks the OK button.
     """
+    # Ensure a QApplication instance exists.
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+
+    dialog = QDialog()
+    dialog.setWindowTitle("Saved Samples")
+    layout = QVBoxLayout()
+
+    # Saved Samples list.
+    saved_label = QLabel("Saved Samples")
+    layout.addWidget(saved_label)
+    saved_list = QListWidget()
     saved_files = sorted(os.listdir(samples_folder)) if os.path.exists(samples_folder) else []
-    skipped_files = sorted(os.listdir(skipped_folder)) if os.path.exists(skipped_folder) else []
-
-    root = tk.Tk()
-    root.title("Saved Samples")
-    root.geometry("600x400")
-
-    # Left frame for saved samples.
-    left_frame = ttk.Frame(root)
-    left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    ttk.Label(left_frame, text="Saved Samples").pack()
-    saved_list = tk.Listbox(left_frame)
-    saved_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    saved_scroll = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=saved_list.yview)
-    saved_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-    saved_list.configure(yscrollcommand=saved_scroll.set)
     for file in saved_files:
-        saved_list.insert(tk.END, file)
+         saved_list.addItem(file)
+    layout.addWidget(saved_list)
 
-    # Right frame for skipped samples.
-    right_frame = ttk.Frame(root)
-    right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-    ttk.Label(right_frame, text="Skipped Samples").pack()
-    skipped_list = tk.Listbox(right_frame)
-    skipped_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    skipped_scroll = ttk.Scrollbar(right_frame, orient=tk.VERTICAL, command=skipped_list.yview)
-    skipped_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-    skipped_list.configure(yscrollcommand=skipped_scroll.set)
+    # Skipped Samples list.
+    skipped_label = QLabel("Skipped Samples")
+    layout.addWidget(skipped_label)
+    skipped_list = QListWidget()
+    skipped_files = sorted(os.listdir(skipped_folder)) if os.path.exists(skipped_folder) else []
     for file in skipped_files:
-        skipped_list.insert(tk.END, file)
+         skipped_list.addItem(file)
+    layout.addWidget(skipped_list)
 
-    # Bind any key press to close the window.
-    root.bind("<Key>", lambda event: root.destroy())
-    root.mainloop()
+    # OK button to close the dialog.
+    btn = QPushButton("OK")
+    btn.clicked.connect(dialog.accept)
+    layout.addWidget(btn)
+
+    dialog.setLayout(layout)
+    dialog.resize(600, 400)
+    dialog.exec()
 
 def process_video_file(video_path):
     """
@@ -939,9 +937,9 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
                     print(f"Error copying video {src_video}: {e}")
                 if not SKIP_PROGRESSBAR_WINDOWS:
                     update_progress(progress_bar, label_count, idx + 1, total)
-                    progress_win.update()
+                    QApplication.processEvents()
             if not SKIP_PROGRESSBAR_WINDOWS:
-                progress_win.destroy()
+                progress_win.close()
             show_saved_samples_window(SAMPLES_DIR, SKIPPED_DIR)
         elif event.key == "x":
             # Cleanup operation: delete files from "detections" and the output directory.
@@ -961,9 +959,9 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
                 current += 1
                 if not SKIP_PROGRESSBAR_WINDOWS:
                     update_progress(progress_bar, label_count, current, total)
-                    progress_win.update()
+                    QApplication.processEvents()
             if not SKIP_PROGRESSBAR_WINDOWS:
-                progress_win.destroy()
+                progress_win.close()
             detection_states.clear()
             del global_detections[:]
             selected_idx[0] = 0
@@ -1252,9 +1250,9 @@ while True:
             current += 1
             if not SKIP_PROGRESSBAR_WINDOWS:
                 update_progress(progress_bar, label_count, current, len(file_list))
-                progress_win.update()
+                QApplication.processEvents()
         if not SKIP_PROGRESSBAR_WINDOWS:
-            progress_win.destroy()
+            progress_win.close()
         print("Finished processing all gesture videos. Launching review window...")
         show_timeline_and_features()  # review window
         is_review = False    
