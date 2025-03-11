@@ -98,6 +98,22 @@ def show_help_window():
     global is_paused
     is_paused = True
     help_text = (
+        "Happy flow:\n"
+        "  Webcam Window: \n"
+        "  -> space: Start recording\n"
+    "         [Do the gestures]\n"
+        "  -> space: Stop recording\n"
+        "  -> r: Switch to Review Mode \n"
+        "  Review Window: \n"
+        "  -> left/right or click: Select detection in review window\n"
+        "  -> a: Mark ALL detections as SAVE\n"
+        "  -> w: Display saved/skipped samples window\n"
+        "  -> x: Clean-up detections & recorded gestures,\n"
+        "        return to Webcam Window\n"
+        "  [Repeat / End]\n"
+        "    \n"
+        "-------------------------------------\n"
+        "    \n"
         "Help - Available Keys:\n"
         "  Webcam Window: \n"
         "    space: Toggle recording\n"
@@ -106,7 +122,6 @@ def show_help_window():
         "    q / ESC: Exit\n"
         "    \n"
         "  Review Window: \n"
-        "    w: Display saved/skipped samples window\n"
         "    left/right or click: Select detection in review window\n"
         "    space: Playback the selected detection video\n"
         "    down: Mark selected detection as SAVE (green tint)\n"
@@ -114,11 +129,12 @@ def show_help_window():
         "    a: Mark ALL detections as SAVE\n"
         "    c: Mark ALL detections as NONE\n"
         "    q: Close to Webcam Window (without clean-up)\n"
+        "    w: Display saved/skipped samples window\n"
         "    x: Clean-up detections & recorded gestures,\n"
         "       return to Webcam Window"
     )
 
-    help_img = np.ones((300, 500, 3), dtype=np.uint8) * 230
+    help_img = np.ones((560, 500, 3), dtype=np.uint8) * 230
     y0, dy = 16, 16
     for i, line in enumerate(help_text.split("\n")):
         cv2.putText(help_img, line, (10, y0 + i * dy),
