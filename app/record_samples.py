@@ -24,6 +24,7 @@ BASE_PATH = os.getenv("BASE_PATH")
 APP_REL_PATH = os.getenv("APP_REL_PATH") or "app/"
 WEBCAM_INDEX = int(os.getenv("WEBCAM_INDEX") or 0) 
 DETECTION_INTERVAL_SEC = float(os.getenv("DETECTION_INTERVAL_SEC") or 0.25)
+VIDEO_ENCODER_FOURCC = os.getenv("VIDEO_ENCODER_FOURCC") or "mp42" # "mp4v" for Windows, "avc1" for MacOS
 
 # Set current working directory to the app folder
 os.chdir(BASE_PATH + APP_REL_PATH)
