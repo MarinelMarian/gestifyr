@@ -10,6 +10,8 @@ import csv
 from PIL import ImageFont, ImageDraw, Image
 import shutil
 import glob
+import tkinter as tk
+from tkinter import ttk
 
 
 from videoProcessingTools import get_angles
@@ -46,12 +48,15 @@ video_writer = None
 gesture_frame_count = 0
 
 # Create a directory to save recorded videos
-output_dir = "recorded_gestures"
-os.makedirs(output_dir, exist_ok=True)
-
+RECORDINGS_DIR = "recordings"
+os.makedirs(RECORDINGS_DIR, exist_ok=True)
+DETECTIONS_DIR = "detections"
+os.makedirs(DETECTIONS_DIR, exist_ok=True)
 # Create a directory to save detected gesture samples
-SAMPLES_FOLDER = "samples"
-os.makedirs(SAMPLES_FOLDER, exist_ok=True)
+SAMPLES_DIR = "samples"
+os.makedirs(SAMPLES_DIR, exist_ok=True)
+SKIPPED_DIR = "skipped"
+os.makedirs(SKIPPED_DIR, exist_ok=True)
 
 # Global state for interactive review.
 # List of detections; each detection is (global_x0, global_x1, csv_filename)
@@ -88,6 +93,92 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 gesture_font = cv2.FONT_HERSHEY_SIMPLEX
 
 cv2.namedWindow("Webcam Feed")
+
+def show_help_window():
+    global is_paused
+    is_paused = True
+    help_text = (
+        "Help - Available Keys:\n"
+        "  Webcam Window: \n"
+        "    space: Toggle recording\n"
+        "    r: Switch to Review Mode \n"
+        "    h: Show this help window\n"
+        "    q / ESC: Exit\n"
+        "    \n"
+        "  Review Window: \n"
+        "    w: Display saved/skipped samples window\n"
+        "    left/right or click: Select detection in review window\n"
+        "    space: Playback the selected detection video\n"
+        "    down: Mark selected detection as SAVE (green tint)\n"
+        "    up: Mark selected detection as SKIP (grey tint)\n"
+        "    a: Mark ALL detections as SAVE\n"
+        "    c: Mark ALL detections as NONE\n"
+        "    q: Close to Webcam Window (without clean-up)\n"
+        "    x: Clean-up detections & recorded gestures,\n"
+        "       return to Webcam Window"
+    )
+
+    help_img = np.ones((300, 500, 3), dtype=np.uint8) * 230
+    y0, dy = 16, 16
+    for i, line in enumerate(help_text.split("\n")):
+        cv2.putText(help_img, line, (10, y0 + i * dy),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+    cv2.imshow("Help", help_img)
+
+    cv2.waitKey(1000)  # Wait 1 second to ensure the window is displayed.
+    
+    # Continuously check if the window is closed or a key is pressed.
+    while True:
+        # wait 10ms for key press.
+        key = cv2.waitKey(10)
+        if key != -1 or cv2.getWindowProperty("Help", cv2.WND_PROP_VISIBLE) < 1:
+            break
+    try:
+        cv2.destroyWindow("Help")
+    except cv2.error:
+        pass
+
+def show_saved_samples_window(samples_folder, skipped_folder):
+    """
+    Display a Tkinter window titled "Saved Samples" that lists the saved samples
+    (files in the 'samples' folder) on the left and the skipped samples (files in the
+    'skipped' folder) on the right. Each listbox is scrollable.
+    The window will close if any key is pressed.
+    """
+    saved_files = sorted(os.listdir(samples_folder)) if os.path.exists(samples_folder) else []
+    skipped_files = sorted(os.listdir(skipped_folder)) if os.path.exists(skipped_folder) else []
+
+    root = tk.Tk()
+    root.title("Saved Samples")
+    root.geometry("600x400")
+
+    # Left frame for saved samples.
+    left_frame = ttk.Frame(root)
+    left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    ttk.Label(left_frame, text="Saved Samples").pack()
+    saved_list = tk.Listbox(left_frame)
+    saved_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    saved_scroll = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=saved_list.yview)
+    saved_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+    saved_list.configure(yscrollcommand=saved_scroll.set)
+    for file in saved_files:
+        saved_list.insert(tk.END, file)
+
+    # Right frame for skipped samples.
+    right_frame = ttk.Frame(root)
+    right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+    ttk.Label(right_frame, text="Skipped Samples").pack()
+    skipped_list = tk.Listbox(right_frame)
+    skipped_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    skipped_scroll = ttk.Scrollbar(right_frame, orient=tk.VERTICAL, command=skipped_list.yview)
+    skipped_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+    skipped_list.configure(yscrollcommand=skipped_scroll.set)
+    for file in skipped_files:
+        skipped_list.insert(tk.END, file)
+
+    # Bind any key press to close the window.
+    root.bind("<Key>", lambda event: root.destroy())
+    root.mainloop()
 
 def process_video_file(video_path):
     """
@@ -235,12 +326,24 @@ def merge_intervals(intervals):
 def get_composite_info(video_files, target_img_height, header_height, font_face, font_scale, thickness, text_color):
     """
     Process video files to create composite images.
-    Returns a list of tuples:
+    The header height, target image height and font_scale will be reduced
+    proportional to the number of video_files.
+    Returns a tuple:
+      (composite_info, new_target_img_height, new_header_height, new_font_scale)
+    where composite_info is a list of tuples:
       (composite image, video_frame_count, gesture_key, filename)
     """
+    num_files = len(video_files)
+    # Calculate an adjustment factor (for example, 1 divided by number of files)
+    # You might modify the formula as desired.
+    adjust_factor = (1.0 / num_files if num_files > 0 else 1.0)*num_files
+    new_target_img_height = max(1, int(target_img_height * adjust_factor))#//3+1
+    new_header_height = max(1, int(header_height * adjust_factor))
+    new_font_scale = font_scale * adjust_factor
+
     composite_info = []
     for f in video_files:
-        video_path = os.path.join(output_dir, f)
+        video_path = os.path.join(RECORDINGS_DIR, f)
         cap_vid = cv2.VideoCapture(video_path)
         if not cap_vid.isOpened():
             continue
@@ -251,34 +354,30 @@ def get_composite_info(video_files, target_img_height, header_height, font_face,
         cap_vid.release()
         if ret:
             h, w = frame.shape[:2]
-            scale = target_img_height / h
+            scale = new_target_img_height / h
             new_w = int(w * scale)
-            resized_frame = cv2.resize(frame, (new_w, target_img_height))
-            composite = np.full((header_height + target_img_height, new_w, 3), 200, dtype=np.uint8)
+            resized_frame = cv2.resize(frame, (new_w, new_target_img_height))
+            composite = np.full((new_header_height + new_target_img_height, new_w, 3), 200, dtype=np.uint8)
             # Determine gesture from filename.
             base = os.path.basename(video_path)
             parts = base.split("_")
-            if len(parts) >= 2:
-                try:
-                    gesture_index = int(parts[1])
-                    gesture_key = GESTURES[gesture_index]
-                    gesture_label = gestures_dict[gesture_key]["name"]
-                except Exception:
-                    gesture_key = "unknown"
-                    gesture_label = "Unknown"
-            else:
+            try:
+                gesture_index = int(parts[1])
+                gesture_key = GESTURES[gesture_index]
+                gesture_label = gestures_dict[gesture_key]["name"]
+            except Exception:
                 gesture_key = "unknown"
                 gesture_label = "Unknown"
-            # Write the gesture label in the header.
-            (text_w, text_h), _ = cv2.getTextSize(gesture_label, font_face, font_scale, thickness)
+            # Write the gesture label in the header using the new font scale.
+            (text_w, text_h), _ = cv2.getTextSize(gesture_label, font_face, new_font_scale, thickness)
             text_x = (new_w - text_w) // 2
             text_y = text_h
             cv2.putText(composite, gesture_label, (text_x, text_y),
-                        font_face, font_scale, text_color, thickness, lineType=cv2.LINE_AA)
+                        font_face, new_font_scale, text_color, thickness, lineType=cv2.LINE_AA)
             # Place the resized frame below the header.
-            composite[header_height:header_height+target_img_height, 0:new_w, :] = resized_frame
+            composite[new_header_height:new_header_height + new_target_img_height, 0:new_w, :] = resized_frame
             composite_info.append((composite, total_frames, gesture_key, f))
-    return composite_info
+    return composite_info, new_target_img_height, new_header_height, new_font_scale
 
 def get_csv_info(video_files):
     """
@@ -288,7 +387,7 @@ def get_csv_info(video_files):
     """
     csv_info = []
     for f in video_files:
-        video_path = os.path.join(output_dir, f)
+        video_path = os.path.join(RECORDINGS_DIR, f)
         csv_path = os.path.splitext(video_path)[0] + ".csv"
         if os.path.exists(csv_path):
             try:
@@ -309,18 +408,25 @@ def get_csv_info(video_files):
 def build_timeline(composite_info, timeline_total_width, composite_height):
     """
     Build the timeline image and determine vertical boundaries.
-    Returns (timeline, boundaries)
+    For each composite image (representing a gesture), the image is centered
+    horizontally within its target width on the timeline.
+    
+    Returns:
+        timeline: the final timeline image.
+        boundaries: a list of left-boundary x positions in pixels.
     """
     timeline_parts = []
     boundaries = []
     cumulative = 0
     total_video_frames = sum(frames for (_, frames, _, _) in composite_info)
     timeline_total_width = max(timeline_total_width, total_video_frames)
+    
     for composite, frames, _, _ in composite_info:
         target_width = int((frames / total_video_frames) * timeline_total_width)
         boundaries.append(cumulative)
         current_width = composite.shape[1]
         if current_width < target_width:
+            # Pad equally on both sides.
             total_pad = target_width - current_width
             pad_left = total_pad // 2
             pad_right = total_pad - pad_left
@@ -328,11 +434,10 @@ def build_timeline(composite_info, timeline_total_width, composite_height):
             right_pad = np.full((composite.shape[0], pad_right, 3), 200, dtype=np.uint8)
             composite_resized = np.hstack((left_pad, composite, right_pad))
         else:
+            # Crop equally on both sides.
             excess = current_width - target_width
             crop_left = excess // 2
             composite_resized = composite[:, crop_left:crop_left + target_width]
-        # Re-add gesture label if needed.
-        # (Optional step if cropping alters the header.)
         timeline_parts.append(composite_resized)
         cumulative += target_width
 
@@ -444,62 +549,67 @@ def build_detections(csv_info, composite_info, fps, detection_interval):
         cumulative_feat_prev += seg_length
     return detections
 
-def save_detections(detections, output_dir):
+def save_detections(detections, output_dir, det_folder):
     """
     Given a list of detections (each a tuple: (csv_filename, start_idx, end_idx, seg_offset)),
     for each detection, crop the corresponding CSV and MP4 files and save
     them to a folder called "detections". The cropped files use the same base filename
     as the original gesture files with an added _detection marker.
     """
-    det_folder = "detections"
-    os.makedirs(det_folder, exist_ok=True)
+  
     for (csv_fname, start_idx, end_idx, seg_offset) in detections:
         # The original CSV and video files are in the output directory.
         base = os.path.splitext(csv_fname)[0]
         csv_path = os.path.join(output_dir, base + ".csv")
         video_path = os.path.join(output_dir, base + ".mp4")
-        # Crop the CSV.
-        try:
-            with open(csv_path, "r") as f_csv:
-                reader = list(csv.reader(f_csv))
-            header_line = reader[0]
-            data_rows = reader[1:]
-            cropped_data = data_rows[start_idx : end_idx + 1]
-            cropped_csv_path = os.path.join(det_folder, base + f"_detection_{start_idx}_{end_idx}.csv")
-            with open(cropped_csv_path, "w", newline="") as f_out:
-                writer = csv.writer(f_out)
-                writer.writerow(header_line)
-                writer.writerows(cropped_data)
-            print(f"Saved detection CSV: {cropped_csv_path}")
-        except Exception as e:
-            print(f"Error cropping CSV {csv_path}: {e}")
-        # Crop the video.
-        cap_vid = cv2.VideoCapture(video_path)
-        if not cap_vid.isOpened():
-            print(f"Error opening video for detection: {video_path}")
-            continue
-        total_frames = int(cap_vid.get(cv2.CAP_PROP_FRAME_COUNT))
-        # We assume here that the number of CSV rows equals the number of frames.
-        start_frame = start_idx
-        end_frame = min(end_idx, total_frames - 1)
-        ret, frame = cap_vid.read()
-        if not ret:
-            cap_vid.release()
-            continue
-        h, w = frame.shape[:2]
-        fourcc = cv2.VideoWriter_fourcc(*"mp42")
-        fps_vid = cap_vid.get(cv2.CAP_PROP_FPS)
-        cropped_video_path = os.path.join(det_folder, base + f"_detection_{start_idx}_{end_idx}.mp4")
-        writer = cv2.VideoWriter(cropped_video_path, fourcc, fps_vid, (w, h))
-        cap_vid.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-        for fnum in range(start_frame, end_frame + 1):
+        dest_csv_path = os.path.join(det_folder, base + ".csv")
+        dest_video_path = os.path.join(det_folder, base + ".mp4")
+
+        if os.path.exists(csv_path) and not os.path.exists(dest_csv_path):
+            # Crop the CSV.
+            try:
+                with open(csv_path, "r") as f_csv:
+                    reader = list(csv.reader(f_csv))
+                header_line = reader[0]
+                data_rows = reader[1:]
+                cropped_data = data_rows[start_idx : end_idx + 1]
+                                                                                                       
+                with open(dest_csv_path, "w", newline="") as f_out:
+                    writer = csv.writer(f_out)
+                    writer.writerow(header_line)
+                    writer.writerows(cropped_data)
+                print(f"Saved detection CSV: {dest_csv_path}")
+            except Exception as e:
+                print(f"Error cropping CSV {csv_path}: {e}")
+
+        if os.path.exists(video_path) and not os.path.exists(dest_video_path):
+            # Crop the video.
+            cap_vid = cv2.VideoCapture(video_path)
+            if not cap_vid.isOpened():
+                print(f"Error opening video for detection: {video_path}")
+                continue
+            total_frames = int(cap_vid.get(cv2.CAP_PROP_FRAME_COUNT))
+            # We assume here that the number of CSV rows equals the number of frames.
+            start_frame = start_idx
+            end_frame = min(end_idx, total_frames - 1)
             ret, frame = cap_vid.read()
             if not ret:
-                break
-            writer.write(frame)
-        writer.release()
-        cap_vid.release()
-        print(f"Saved detection video: {cropped_video_path}")
+                cap_vid.release()
+                continue
+            h, w = frame.shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*"mp42")
+            fps_vid = cap_vid.get(cv2.CAP_PROP_FPS)
+                                                                                                     
+            writer = cv2.VideoWriter(dest_video_path, fourcc, fps_vid, (w, h))
+            cap_vid.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+            for fnum in range(start_frame, end_frame + 1):
+                ret, frame = cap_vid.read()
+                if not ret:
+                    break
+                writer.write(frame)
+            writer.release()
+            cap_vid.release()
+            print(f"Saved detection video: {dest_video_path}")
 
 def build_detections(csv_info, composite_info, fps, detection_interval):
     """
@@ -535,94 +645,39 @@ def build_detections(csv_info, composite_info, fps, detection_interval):
         cumulative_feat_prev += seg_length
     return detections
 
-def save_detections(detections, output_dir):
+def playback_detection_video(detection, detections_dir, fps):
     """
-    Given a list of detections (each a tuple: (csv_filename, start_idx, end_idx, seg_offset)),
-    for each detection, crop the corresponding CSV and MP4 files and save
-    them to a folder called "detections". The cropped files use the same base filename
-    as the original gesture files with an added _detection marker.
-    """
-    det_folder = "detections"
-    os.makedirs(det_folder, exist_ok=True)
-    for (csv_fname, start_idx, end_idx, seg_offset) in detections:
-        # The original CSV and video files are in the output directory.
-        base = os.path.splitext(csv_fname)[0]
-        csv_path = os.path.join(output_dir, base + ".csv")
-        video_path = os.path.join(output_dir, base + ".mp4")
-
-        if not os.path.exists(csv_path):
-            # Crop the CSV.
-            try:
-                with open(csv_path, "r") as f_csv:
-                    reader = list(csv.reader(f_csv))
-                header_line = reader[0]
-                data_rows = reader[1:]
-                cropped_data = data_rows[start_idx : end_idx + 1]
-                cropped_csv_path = os.path.join(det_folder, base + f"_detection_{start_idx}_{end_idx}.csv")
-                with open(cropped_csv_path, "w", newline="") as f_out:
-                    writer = csv.writer(f_out)
-                    writer.writerow(header_line)
-                    writer.writerows(cropped_data)
-                print(f"Saved detection CSV: {cropped_csv_path}")
-            except Exception as e:
-                print(f"Error cropping CSV {csv_path}: {e}")
-
-        if not os.path.exists(video_path):
-            # Crop the video.
-            cap_vid = cv2.VideoCapture(video_path)
-            if not cap_vid.isOpened():
-                print(f"Error opening video for detection: {video_path}")
-                continue
-            total_frames = int(cap_vid.get(cv2.CAP_PROP_FRAME_COUNT))
-            # We assume here that the number of CSV rows equals the number of frames.
-            start_frame = start_idx
-            end_frame = min(end_idx, total_frames - 1)
-            ret, frame = cap_vid.read()
-            if not ret:
-                cap_vid.release()
-                continue
-            h, w = frame.shape[:2]
-            fourcc = cv2.VideoWriter_fourcc(*"mp42")
-            fps_vid = cap_vid.get(cv2.CAP_PROP_FPS)
-            cropped_video_path = os.path.join(det_folder, base + f"_detection_{start_idx}_{end_idx}.mp4")
-            writer = cv2.VideoWriter(cropped_video_path, fourcc, fps_vid, (w, h))
-            cap_vid.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-            for fnum in range(start_frame, end_frame + 1):
-                ret, frame = cap_vid.read()
-                if not ret:
-                    break
-                writer.write(frame)
-            writer.release()
-            cap_vid.release()
-            print(f"Saved detection video: {cropped_video_path}")
-
-def playback_detection_video(detection, output_dir, fps):
-    """
-    Given a detection tuple (global_x0, global_x1, csv_filename) play
+    Given a detection tuple (global_x0, global_x1, csv_filename), play
     the corresponding video (derived from the CSV filename) in a separate window.
-    The video playback auto-closes 1 second after the video ends or if space is pressed.
+    The window size is set to match the video frame size.
+    The playback auto-closes 1 second after the video ends or if space is pressed.
     """
-    # Derive video filename; assume CSV filename has the same base name.
     csv_fname = detection[2]
     base = os.path.splitext(csv_fname)[0]
-    video_path = os.path.join(output_dir, base + ".mp4")
+    video_path = os.path.join(detections_dir, base + ".mp4")
     cap_vid = cv2.VideoCapture(video_path)
     if not cap_vid.isOpened():
         print("Error opening video for detection:", video_path)
         return
     window_name = "Detection Playback"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    # Playback loop.
+    # Read first frame to set window size.
+    ret, frame = cap_vid.read()
+    if not ret:
+        cap_vid.release()
+        return
+    h, w = frame.shape[:2]
+    cv2.resizeWindow(window_name, w, h)
+    # Reset playback position to the beginning.
+    cap_vid.set(cv2.CAP_PROP_POS_FRAMES, 0)
     while True:
         ret, frame = cap_vid.read()
         if not ret:
             break
         cv2.imshow(window_name, frame)
-        # Wait 30ms per frame; if space is pressed, break playback early.
         key = cv2.waitKey(30) & 0xFF
         if key == ord(" "):
             break
-    # Auto-close window 1 second after playback stops.
     cv2.waitKey(1000)
     cap_vid.release()
     cv2.destroyWindow(window_name)
@@ -654,23 +709,18 @@ def update_all_detection_overlays(ax, global_detections, detection_states, detec
     return new_patches
 
 # New helper: process detection states to copy files.
-def process_detection_states(global_detections, detection_states, output_dir):
-    samples_folder = "samples"
-    skipped_folder = "skipped"
-    os.makedirs(samples_folder, exist_ok=True)
-    os.makedirs(skipped_folder, exist_ok=True)
-    
+def process_detection_states(global_detections, detection_states):
     for idx, (_, _, csv_fname) in enumerate(global_detections):
         state = detection_states.get(idx, "none")
         base = os.path.splitext(csv_fname)[0]
-        src_csv = os.path.join(output_dir, base + ".csv")
-        src_video = os.path.join(output_dir, base + ".mp4")
+        src_csv = os.path.join(DETECTIONS_DIR, base + ".csv")
+        src_video = os.path.join(DETECTIONS_DIR, base + ".mp4")
         if state == "save":
-            dst_csv = os.path.join(samples_folder, base + ".csv")
-            dst_video = os.path.join(samples_folder, base + ".mp4")
+            dst_csv = os.path.join(SAMPLES_DIR, base + ".csv")
+            dst_video = os.path.join(SAMPLES_DIR, base + ".mp4")
         elif state == "skip" or state == "none":
-            dst_csv = os.path.join(skipped_folder, base + ".csv")
-            dst_video = os.path.join(skipped_folder, base + ".mp4")
+            dst_csv = os.path.join(SKIPPED_DIR, base + ".csv")
+            dst_video = os.path.join(SKIPPED_DIR, base + ".mp4")
         else:
             continue
         try:
@@ -776,7 +826,6 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
 
     def on_key(event):
         global is_review
-        # Left/Right: change selection.
         if not global_detections:
             return
         if event.key == "left":
@@ -786,49 +835,36 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
             selected_idx[0] = min(len(global_detections) - 1, selected_idx[0] + 1)
             update_selection_highlight()
         elif event.key == "down":
-            # Mark selected detection as "save".
             detection_states[selected_idx[0]] = "save"
             refresh_overlays()
         elif event.key == "up":
-            # Mark selected detection as "skip".
             detection_states[selected_idx[0]] = "skip"
             refresh_overlays()
         elif event.key == "a":
-            # Mark all detections as "save".
             for idx in range(len(global_detections)):
                 detection_states[idx] = "save"
             refresh_overlays()
-        elif event.key == "c":
-            # Clear all detections.
-            for idx in range(len(global_detections)):
-                detection_states[idx] = "none"
-            refresh_overlays()
         elif event.key == "w":
             # Process: copy all detections marked for save/skip.
-            process_detection_states(global_detections, detection_states, output_dir)
-        elif event.key == " ":
-            # Playback selected detection.
-            detection = global_detections[selected_idx[0]]
-            playback_detection_video(detection, output_dir, fps)
+            process_detection_states(global_detections, detection_states)
+            show_saved_samples_window(SAMPLES_DIR, SKIPPED_DIR)
         elif event.key == "x":
-            # Overall cleanup: delete all files from detections and output_dir.
-            # Delete all files in folder "detections".
+            # Overall cleanup.
             for folder in ["detections", output_dir]:
-                files = glob.glob(os.path.join(folder, "*"))
-                for f in files:
+                for f in glob.glob(os.path.join(folder, "*")):
                     try:
                         os.remove(f)
                     except Exception as e:
                         print(f"Error deleting {f}: {e}")
-            # Clear global detection collections.
             detection_states.clear()
             del global_detections[:]
-            # Optionally clear any other global states (like selected index).
             selected_idx[0] = 0
-            # Close the interactive window.
             plt.close(fig)
             is_review = False
             print("Cleanup complete. Ready for new recordings.")
+        elif event.key == " ":
+            detection = global_detections[selected_idx[0]]
+            playback_detection_video(detection, DETECTIONS_DIR, fps)
         fig.canvas.draw_idle()
 
     def on_click(event):
@@ -858,66 +894,64 @@ def interactive_feature_wrapper(timeline, boundaries, composite_height, all_feat
 def show_timeline_and_features():
     """
     Orchestrates the building and plotting of the timeline and feature graph.
-    CSV info tuples now include the originating gesture file name, and
-    detection tuples also include that name.
-    BEFORE plotting, call save_detections to save cropped CSV and video files of
-    each detection in a folder called "detections".
-    Then display an interactive feature plot that allows selection and playback.
+    Uses composite_info computed with adjusted target and header heights and font scale.
     """
-    target_img_height = 80
-    header_height = 10
-    composite_height = header_height + target_img_height
+    # Initial (base) parameters.
+    base_target_img_height = 200
+    base_header_height = 15
     font_face = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale_val = 0.33
+    base_font_scale = 0.5
     thickness = 1
     text_color = (0, 0, 0)
-    timeline_min_width = 100
+    timeline_min_width = 2000
 
-    video_files = get_sorted_video_file_list(output_dir)
-    composite_info = get_composite_info(video_files, target_img_height, header_height,
-                                        font_face, font_scale_val, thickness, text_color)
-    csv_info = get_csv_info(video_files)
+    video_files = get_sorted_video_file_list(RECORDINGS_DIR)
+    # Obtain composite info while scaling down the sizes according to the number of video_files.
+    (composite_info, adjusted_target_img_height, adjusted_header_height, adjusted_font_scale) = \
+        get_composite_info(video_files, base_target_img_height, base_header_height, 
+                           font_face, base_font_scale, thickness, text_color)
     
-    # Build timeline image.
+    composite_height = adjusted_header_height + adjusted_target_img_height
     total_video_frames = sum(frames for (_, frames, _, _) in composite_info)
     timeline_total_width = max(timeline_min_width, total_video_frames)
     timeline, boundaries = build_timeline(composite_info, timeline_total_width, composite_height)
     
-    # Aggregate feature data.
-    all_features, header, segment_boundaries = aggregate_feature_data(csv_info)
+    # Continue as before...
+    all_features, header, segment_boundaries = aggregate_feature_data(get_csv_info(video_files))
     all_features_count = len(all_features) if all_features is not None else 0
     factor = timeline_total_width / all_features_count if all_features_count else 1
     x_vals_scaled = [x * factor for x in range(all_features_count)] if all_features_count else []
     
-    # Detect fluctuations in each segment.
     detection_interval = DETECTION_INTERVAL_SEC  # e.g., 0.5 sec
-    raw_detections = build_detections(csv_info, composite_info, fps, detection_interval)
-    # Save the detections (cropped CSV & video) in folder "detections".
-    save_detections(raw_detections, output_dir)
+    raw_detections = build_detections(get_csv_info(video_files), composite_info, fps, detection_interval)
+    save_detections(raw_detections, RECORDINGS_DIR, DETECTIONS_DIR)
     
-    # Convert raw_detections (with CSV row indices) into global x–coordinates for plotting.
     global_detections = []
     for (csv_fname, start_idx, end_idx, seg_offset) in raw_detections:
         global_x0 = (seg_offset + start_idx) * factor
         global_x1 = (seg_offset + end_idx) * factor
         global_detections.append((global_x0, global_x1, csv_fname))
     
-    # Now, call the interactive feature plot that enables selection and playback.
-    interactive_feature_wrapper(timeline, boundaries, composite_height, all_features, header, x_vals_scaled, global_detections, timeline_total_width, fps, output_dir)    
-
-def draw_play_pause_symbol(frame, is_paused):
+    interactive_feature_wrapper(timeline, boundaries, composite_height, all_features, header, 
+                                  x_vals_scaled, global_detections, timeline_total_width, fps, RECORDINGS_DIR)
+    
+def draw_record_pause_symbol(frame, is_paused):
     """
-    Draws the play/pause symbol on the provided frame using the arial.ttf font.
-    - When is_paused is True, display the play symbol (►).
-    - When is_paused is False, display the pause symbol (‖).
+    Instead of a play symbol, when recording (i.e. not paused) display a full red circle.
+    When paused, display the pause symbol as before.
     """
-    # Convert BGR frame to RGB PIL image.
     pil_im = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     draw = ImageDraw.Draw(pil_im)
     
-    # Choose symbol and font properties.
-    symbol = "►" if is_paused else "‖"
-    font_size = 40  # adjust as needed
+    # If recording is active (not paused), display a red full circle; else, display pause symbol.
+    if not is_paused:
+        symbol = "●"  # Unicode full circle (U+25CF)
+        color = (255, 0, 0)  # Red color
+    else:
+        symbol = "●"  # Pause symbol
+        color = (128, 128, 128)  # Gray color
+    
+    font_size = 40
     try:
         font = ImageFont.truetype("arial.ttf", font_size)
     except IOError:
@@ -925,17 +959,13 @@ def draw_play_pause_symbol(frame, is_paused):
     
     bbox = font.getbbox(symbol)
     text_w = bbox[2] - bbox[0]
-    text_h = bbox[3] - bbox[1] + font_size // 2  # adjust for better centering
-    
+    text_h = bbox[3] - bbox[1] + font_size  # adjust for better centering
     h, w = frame.shape[:2]
-    overlay_height = 50  # same as your overlay height
+    overlay_height = 50
     x = (w - text_w) // 2
     y = h - overlay_height + (overlay_height - text_h) // 2
 
-    # Draw the symbol with white color.
-    draw.text((x, y), symbol, font=font, fill=(255, 255, 255))
-    
-    # Convert back to OpenCV BGR image.
+    draw.text((x, y), symbol, font=font, fill=color)
     return cv2.cvtColor(np.array(pil_im), cv2.COLOR_RGB2BGR)
 
 def get_sort_key(f):
@@ -971,7 +1001,7 @@ while True:
                 if video_writer is None:
                     temp_timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                     temp_filename = os.path.join(
-                        output_dir,
+                        RECORDINGS_DIR,
                         f"temp_gesture_{current_gesture_index}_{round(fps)}_{temp_timestamp}.mp4",
                     )
                     with open(os.devnull, "w") as devnull, redirect_stderr(devnull):
@@ -1033,11 +1063,11 @@ while True:
                         video_writer = None
                         final_timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                         temp_file = os.path.join(
-                            output_dir,
+                            RECORDINGS_DIR,
                             f"temp_gesture_{current_gesture_index}_{round(fps)}_{temp_timestamp}.mp4",
                         )
                         final_file = os.path.join(
-                            output_dir,
+                            RECORDINGS_DIR,
                             f"gesture_{current_gesture_index}_{round(fps)}_{final_timestamp}.mp4",
                         )
                         os.rename(temp_file, final_file)
@@ -1060,7 +1090,7 @@ while True:
     frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
 
     # After drawing the overlay, replace the play/pause symbol with a PIL-rendered version.
-    frame = draw_play_pause_symbol(frame, is_paused)
+    frame = draw_record_pause_symbol(frame, is_paused)
 
     # Display current gesture for debugging.
     cv2.putText(
@@ -1073,34 +1103,49 @@ while True:
         2,
     )
 
+    # Draw help prompt in top-right corner.
+    help_text = "Press 'h' for help"
+    (ts_width, ts_height), _ = cv2.getTextSize(help_text, font, 0.33, 1)
+    margin = 10
+    text_x = frame_width - ts_width - margin
+    text_y = ts_height + margin
+    cv2.putText(frame, help_text, (text_x, text_y), font, 0.33, (0, 0, 0), 1, cv2.LINE_AA)
+
     cv2.imshow("Webcam Feed", frame)
 
     key = cv2.waitKey(30) & 0xFF
-    if key == ord(" "):  # Toggle play/pause.
+
+    # If help key is pressed, show help window.
+    if key == ord("h"):
+        is_paused = True
+        show_help_window()
+        # Returning from the help window will resume the previous window (which now displays the frozen frame).
+    elif key == ord(" "):  # Toggle pause/recording.
         is_paused = not is_paused
         if not is_paused:
             gesture_phase = "display"
             gesture_phase_start = time.time()
-        print("Paused." if is_paused else "Resumed.")
+        print("Paused." if is_paused else "Recording...")
     elif key == ord("r"):
-        # Enter review mode. In review mode, process each gesture video file.
+        # Enter review mode.
         is_review = True
         is_paused = True
-        if is_review:
-            print("Entering Review Mode...")
-            file_list = get_sorted_video_file_list(output_dir)
-            for f in file_list:
-                if f.startswith("gesture_") and f.endswith(".mp4"):
-                    video_path = os.path.join(output_dir, f)
-                    csv_path = os.path.splitext(video_path)[0] + ".csv"
-                    if not os.path.exists(csv_path):
-                        process_video_file(video_path)
-            print("Finished processing all gesture videos. Exiting Review Mode.")
+        print("Entering Review Mode...")
+        file_list = get_sorted_video_file_list(RECORDINGS_DIR)
+        for f in file_list:
+            if f.startswith("gesture_") and f.endswith(".mp4"):
+                video_path = os.path.join(RECORDINGS_DIR, f)
+                csv_path = os.path.splitext(video_path)[0] + ".csv"
+                if not os.path.exists(csv_path):
+                    process_video_file(video_path)
+        print("Finished processing all gesture videos. Launching review window...")
+        show_timeline_and_features()  # When review window closes, this function returns.
+        is_review = False
+    elif key == ord("q") or key == 27:
+        break
 
-            # After processing, display timeline and feature plot.
-            show_timeline_and_features()
-
-    elif key == ord("q") or key == 27:  # 'q' or ESC to quit
+    # If the webcam window is closed, exit.
+    if cv2.getWindowProperty("Webcam Feed", cv2.WND_PROP_VISIBLE) < 1:
         break
 
 # Clean up

@@ -5,7 +5,7 @@ myenv/
 
 app/__pycache__/
 app/movies
-app/recorded_gestures
+app/recordings
 app/detections
 app/skipped
 
