@@ -83,7 +83,7 @@ if not cap.isOpened():
 frame_width = int(cap.get(3))
 frame_height = int(cap.get(4))
 fps = cap.get(cv2.CAP_PROP_FPS)
-fourcc = cv2.VideoWriter_fourcc(*"mp42")  # avc1 works on MacOS, mp4v works on Windows
+fourcc = cv2.VideoWriter_fourcc(*"VIDEO_ENCODER_FOURCC")  # avc1 works on MacOS, mp4v works on Windows
 
 # When video is paused, show PLAY symbol and state is_paused True;
 # when playing, show PAUSE symbol.
@@ -659,7 +659,7 @@ def save_detections(detections, output_dir, det_folder):
                 cap_vid.release()
                 continue
             h, w = frame.shape[:2]
-            fourcc = cv2.VideoWriter_fourcc(*"mp42")
+            fourcc = cv2.VideoWriter_fourcc(*"VIDEO_ENCODER_FOURCC")
             fps_vid = cap_vid.get(cv2.CAP_PROP_FPS)
                                                                                                      
             writer = cv2.VideoWriter(dest_video_path, fourcc, fps_vid, (w, h))
