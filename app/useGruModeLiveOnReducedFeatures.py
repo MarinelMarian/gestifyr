@@ -45,7 +45,7 @@ clear_terminal()
 
 # Model parameters
 metadata_filename = (
-    f"{BASE_PATH}{APP_REL_PATH}model/processed_trimmed/gru_1741016164/info_model.txt"
+    f"{BASE_PATH}{APP_REL_PATH}model/processed_trimmed/gru_64_3_0.1_5/info_model.txt"
 )
 with open(metadata_filename, "r") as file:
     data = json.load(file)
@@ -53,8 +53,8 @@ input_size = data["input_size"]
 hidden_size = data["hidden_size"]
 output_size = data["output_size"]
 num_layers = data["num_layers"]
-saved_model_file_name = f"{BASE_PATH}{data['modelFile']}"
-saved_scaler_file_name = f"{BASE_PATH}{data['scalerFile']}"
+saved_model_file_name = f"{BASE_PATH}{data['model_file']}"
+saved_scaler_file_name = f"{BASE_PATH}{data['scaler_file']}"
 labels = ["da", "nu ", "gura casca", "ridicat", "nimic"]
 print(
     f"Loaded input_size={input_size}, hidden_size={hidden_size}, output_size={output_size}, num_layers={num_layers}, model_file={saved_model_file_name}"
@@ -87,6 +87,7 @@ scaler = joblib.load(saved_scaler_file_name)
 print("Model loaded successfully!")
 
 cap = cv2.VideoCapture(1)  # Open the default webcam
+cap.set(cv2.CAP_PROP_EXPOSURE, 40)  # Increase exposure
 if not cap.isOpened():
     print("Error: Could not open webcam.")
 idx = 0

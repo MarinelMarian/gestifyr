@@ -5,6 +5,10 @@ myenv/
 
 app/__pycache__/
 app/movies
+app/recordings
+app/detections
+app/skipped
+app/samples/*.mp4
 
 tudor/movies
 tudor/__pycache__/

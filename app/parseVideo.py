@@ -22,8 +22,8 @@ APP_REL_PATH = os.getenv("APP_REL_PATH")
 # ~~~~~~ Setup params ~~~~~~~~~~~
 window_length_ms = 500
 window_overlap_ratio = 0.5
-input_file_path = f"{APP_REL_PATH}/movies/WIN_20250303_21_20_32_Pro.mp4"
-csv_output_file = f"{APP_REL_PATH}/movies/gest1-4.csv"
+input_file_path = f"{APP_REL_PATH}/movies/WIN_20250305_18_57_37_Pro.mp4"
+csv_output_file = f"{APP_REL_PATH}/movies/WIN_20250305_18_57_37_Pro.csv"
 clear_terminal()
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 

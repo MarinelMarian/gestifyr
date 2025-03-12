@@ -13,22 +13,25 @@ import joblib
 import json
 import os
 import datetime as dt
+from dotenv import load_dotenv
 
-
+load_dotenv()
+BASE_PATH = os.getenv("BASE_PATH")
+APP_REL_PATH = os.getenv("APP_REL_PATH")
 
 # --------- Init Params -------
-#Model params
-# hidden_size = 128
-# num_layers = 4
 epochs = 1000
+learning_rate = 0.001
 
-epochThresh = 0.1
 # ---------------------
-modelInputs = { 'filePath':['app/samples2/processed_trimmed'], # list of folders
-               'hiddenSize':[16, 32, 64, 128, 256, 512],
-               'numLayers' : [2, 3, 4],
-               'epochThresh' :[0.5, 0.1, 0.05]
-               } 
+model_inputs = {
+    "file_path": [f"{BASE_PATH}{APP_REL_PATH}samples3/processed_trimmed"],  # list of folders
+    "hidden_size": [64],
+    "num_layers": [3],
+    "epoch_thresh": [0.1],
+    "batch_size": [5],
+}
+
 
 # Define GRU Model
 class GRUNet(nn.Module):
@@ -36,11 +39,12 @@ class GRUNet(nn.Module):
         super(GRUNet, self).__init__()
         self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
-    
+
     def forward(self, x):
         out, _ = self.gru(x)
         out = self.fc(out[:, -1, :])  # Take last output
         return out
+
 
 # Custom Dataset
 class GestureDataset(Dataset):
@@ -56,18 +60,20 @@ class GestureDataset(Dataset):
             features = scaler.transform(features)  # Normalize
             self.data.append(features)
             if train:
-                gesture_name = os.path.basename(file_path).split('_')[1]  # Extract label from file name
+                gesture_name = os.path.basename(file_path).split("_")[
+                    1
+                ]  # Extract label from file name
                 self.labels.append(label_encoder.transform([gesture_name])[0])
         self.data = [torch.tensor(d, dtype=torch.float32) for d in self.data]
         self.labels = torch.tensor(self.labels, dtype=torch.long)
-    
+
     def __len__(self):
         return len(self.data)
-    
-    def __getitem__(self, idx):
 
+    def __getitem__(self, idx):
         return self.data[idx], [] if self.train == False else self.labels[idx]
-    
+
+
 def collate_fn(batch):
     sequences, labels = zip(*batch)  # Unzip batch
     sequences_padded = pad_sequence(sequences, batch_first=True)  # Pad sequences
@@ -76,35 +82,49 @@ def collate_fn(batch):
 
 
 # Load and process data
-def calculateModel(**kwargs):
-    print('\n\n\n-------------------')
+def calculate_model(**kwargs):
+    print("\n\n\n-------------------")
     print(f"Starting new model calculation with params :{kwargs}")
-    outputFolder = kwargs["filePath"].split('/')[-1]
+    output_folder = kwargs["file_path"].split("/")[-1]
 
-    modelName = f'gru_{int(dt.datetime.now().timestamp())}'
-    os.makedirs(f'app/model/{outputFolder}/{modelName}', exist_ok=True)
-    saveModelFileName = f"app/model/{outputFolder}/{modelName}/gru_model.pth"
-    saveScalerFileName = f"app/model/{outputFolder}/{modelName}/scaler.pkl"
-    modelMetadataFile = f"app/model/{outputFolder}/{modelName}/info_model.txt"
-    train_files = glob.glob(f'{kwargs["filePath"]}/*.csv')
-    labels = sorted(set(os.path.basename(f).split('_')[1] for f in train_files))
-    print(f'Labels found: {labels}')
+    model_name = (
+        f'gru_{kwargs["hidden_size"]}_{kwargs["num_layers"]}_{kwargs["epoch_thresh"]}_{kwargs["batch_size"]}'
+    )
+    os.makedirs(f"{BASE_PATH}{APP_REL_PATH}model/{output_folder}/{model_name}", exist_ok=True)
+    save_model_file_name = (
+        f"{BASE_PATH}{APP_REL_PATH}model/{output_folder}/{model_name}/gru_model.pth"
+    )
+    save_scaler_file_name = (
+        f"{BASE_PATH}{APP_REL_PATH}model/{output_folder}/{model_name}/scaler.pkl"
+    )    
+    save_model_rel_file_name = (
+        f"{APP_REL_PATH}model/{output_folder}/{model_name}/gru_model.pth"
+    )
+    save_scaler_rel_file_name = (
+        f"{APP_REL_PATH}model/{output_folder}/{model_name}/scaler.pkl"
+    )
+    model_metadata_file = (
+        f"{BASE_PATH}{APP_REL_PATH}model/{output_folder}/{model_name}/info_model.txt"
+    )
+    train_files = glob.glob(f'{kwargs["file_path"]}/*.csv')
+    labels = sorted(set(os.path.basename(f).split("_")[1] for f in train_files))
+    print(f"Labels found: {labels}")
     label_encoder = LabelEncoder()
     label_encoder.fit(labels)
     scaler = StandardScaler()
 
     train_dataset = GestureDataset(train_files, label_encoder, scaler, train=True)
-    train_loader = DataLoader(train_dataset, batch_size=5, shuffle=True, collate_fn=collate_fn)
-
+    train_loader = DataLoader(
+        train_dataset, batch_size=kwargs["batch_size"], shuffle=True, collate_fn=collate_fn
+    )
 
     # Model parameters
     input_size = next(iter(train_dataset))[0].shape[1]  # Feature size
     output_size = len(labels)
 
-
-    model = GRUNet(input_size, kwargs['hiddenSize'], output_size, kwargs['numLayers'])
+    model = GRUNet(input_size, kwargs["hidden_size"], output_size, kwargs["num_layers"])
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     # Training loop
     for epoch in range(epochs):
@@ -112,7 +132,6 @@ def calculateModel(**kwargs):
         total_loss = 0
         for inputs, targets in train_loader:
             inputs = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True)
-            targets = targets
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, targets)
@@ -120,25 +139,34 @@ def calculateModel(**kwargs):
             optimizer.step()
             total_loss += loss.item()
         print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(train_loader):.4f}")
-        if total_loss/len(train_loader) < kwargs['epochThresh']:
+        if total_loss / len(train_loader) < kwargs["epoch_thresh"]:
             break
-    torch.save(model.state_dict(), saveModelFileName)
-    joblib.dump(scaler, saveScalerFileName)
+    torch.save(model.state_dict(), save_model_file_name)
+    joblib.dump(scaler, save_scaler_file_name)
     metadata = {
-        'modelFile': saveModelFileName,
-        'scalerFile': saveScalerFileName,
-        'hidden_size' : kwargs['hiddenSize'],
-        "num_layers" : kwargs['numLayers'],
+        "model_file": save_model_rel_file_name,
+        "scaler_file": save_scaler_rel_file_name,
+        "hidden_size": kwargs["hidden_size"],
+        "num_layers": kwargs["num_layers"],
         "labels": labels,
         "input_size": input_size,
-        "output_size": output_size
+        "output_size": output_size,
     }
-    with open(modelMetadataFile, "w") as file:
+    with open(model_metadata_file, "w") as file:
         json.dump(metadata, file, indent=4)
         print(f"MetaData saved successfully! to file {file}")
     print("Model saved successfully!")
-for filePath in modelInputs['filePath']:
-    for hiddenSize in modelInputs['hiddenSize']:
-        for numLayers in modelInputs['numLayers']:
-            for epochThresh in modelInputs['epochThresh']:
-                calculateModel(filePath=filePath, hiddenSize=hiddenSize, numLayers=numLayers, epochThresh=epochThresh)
+
+
+for file_path in model_inputs["file_path"]:
+    for hidden_size in model_inputs["hidden_size"]:
+        for num_layers in model_inputs["num_layers"]:
+            for epoch_thresh in model_inputs["epoch_thresh"]:
+                for batch_size in model_inputs["batch_size"]:
+                    calculate_model(
+                        file_path=file_path,
+                        hidden_size=hidden_size,
+                        num_layers=num_layers,
+                        epoch_thresh=epoch_thresh,
+                        batch_size=batch_size,
+                    )
