@@ -11,10 +11,6 @@ import csv
 from PIL import ImageFont, ImageDraw, Image
 import shutil
 import glob
-import tkinter as tk
-from tkinter import ttk
-from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QProgressBar, QListWidget, QPushButton
-import sys
 
 
 from videoProcessingTools import get_angles
@@ -28,7 +24,6 @@ APP_REL_PATH = os.getenv("APP_REL_PATH") or "app/"
 WEBCAM_INDEX = int(os.getenv("WEBCAM_INDEX") or 0) 
 DETECTION_INTERVAL_SEC = float(os.getenv("DETECTION_INTERVAL_SEC") or 0.25)
 VIDEO_ENCODER_FOURCC = os.getenv("VIDEO_ENCODER_FOURCC") or "mp42" # "mp4v" for Windows, "avc1" for MacOS
-SKIP_PROGRESSBAR_WINDOWS = int(os.getenv("SKIP_PROGRESSBAR_WINDOWS") or 0) 
 
 # Set current working directory to the app folder
 os.chdir(BASE_PATH + APP_REL_PATH)
@@ -99,46 +94,6 @@ gesture_font = cv2.FONT_HERSHEY_SIMPLEX
 
 cv2.namedWindow("Webcam Feed")
 
-def show_progress_modal(total, operation_text):
-    """
-    Create a modal progress window using PySide6 that:
-      - Displays the current operation (operation_text)
-      - Shows a count label "x/y"
-      - Contains a progress bar (maximum set to 'total')
-    """
-    # Ensure a QApplication instance exists.
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(sys.argv)
-    dialog = QDialog()
-    dialog.setWindowTitle("Processing...")
-    dialog.setModal(True)
-    layout = QVBoxLayout()
-    
-    label_op = QLabel(operation_text)
-    layout.addWidget(label_op)
-    
-    label_count = QLabel("0/{}".format(total))
-    layout.addWidget(label_count)
-    
-    progress_bar = QProgressBar()
-    progress_bar.setOrientation(PySide6.QtCore.Qt.Horizontal)  # Horizontal
-    progress_bar.setMaximum(total)
-    progress_bar.setValue(0)
-    layout.addWidget(progress_bar)
-    
-    dialog.setLayout(layout)
-    dialog.resize(400, 150)
-    dialog.show()
-    app.processEvents()  # Ensure the dialog appears
-    return dialog, label_op, label_count, progress_bar
-
-def update_progress(progress_bar, label_count, current, total):
-    """Update the progress bar value and count label using PySide6."""
-    progress_bar.setValue(current)
-    label_count.setText("{}/{}".format(current, total))
-    QApplication.processEvents()
-
 def show_help_window():
     global is_paused
     is_paused = True
@@ -198,48 +153,6 @@ def show_help_window():
         cv2.destroyWindow("Help")
     except cv2.error:
         pass
-
-def show_saved_samples_window(samples_folder, skipped_folder):
-    """
-    Create a PySide6 modal dialog titled "Saved Samples" that lists the saved samples
-    (files in the 'samples' folder) and skipped samples (files in the 'skipped' folder).
-    The dialog closes when the user clicks the OK button.
-    """
-    # Ensure a QApplication instance exists.
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(sys.argv)
-
-    dialog = QDialog()
-    dialog.setWindowTitle("Saved Samples")
-    layout = QVBoxLayout()
-
-    # Saved Samples list.
-    saved_label = QLabel("Saved Samples")
-    layout.addWidget(saved_label)
-    saved_list = QListWidget()
-    saved_files = sorted(os.listdir(samples_folder)) if os.path.exists(samples_folder) else []
-    for file in saved_files:
-         saved_list.addItem(file)
-    layout.addWidget(saved_list)
-
-    # Skipped Samples list.
-    skipped_label = QLabel("Skipped Samples")
-    layout.addWidget(skipped_label)
-    skipped_list = QListWidget()
-    skipped_files = sorted(os.listdir(skipped_folder)) if os.path.exists(skipped_folder) else []
-    for file in skipped_files:
-         skipped_list.addItem(file)
-    layout.addWidget(skipped_list)
-
-    # OK button to close the dialog.
-    btn = QPushButton("OK")
-    btn.clicked.connect(dialog.accept)
-    layout.addWidget(btn)
-
-    dialog.setLayout(layout)
-    dialog.resize(600, 400)
-    dialog.exec()
 
 def process_video_file(video_path):
     """
@@ -908,8 +821,6 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
         elif event.key == "w":
             # Process: copy all detections marked save or skip
             total = len(global_detections)
-            if not SKIP_PROGRESSBAR_WINDOWS:
-                progress_win, label_op, label_count, progress_bar = show_progress_modal(total, "Copying detections...")
             for idx, detection in enumerate(global_detections):
                 state = detection_states.get(idx, "none")
                 base = os.path.splitext(detection[2])[0]
@@ -935,12 +846,6 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
                         print(f"Copied video: {dst_video}")
                 except Exception as e:
                     print(f"Error copying video {src_video}: {e}")
-                if not SKIP_PROGRESSBAR_WINDOWS:
-                    update_progress(progress_bar, label_count, idx + 1, total)
-                    QApplication.processEvents()
-            if not SKIP_PROGRESSBAR_WINDOWS:
-                progress_win.close()
-            show_saved_samples_window(SAMPLES_DIR, SKIPPED_DIR)
         elif event.key == "x":
             # Cleanup operation: delete files from "detections" and the output directory.
             folders = [DETECTIONS_DIR, output_dir]
@@ -948,8 +853,6 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
             for folder in folders:
                 all_files.extend(glob.glob(os.path.join(folder, "*")))
             total = len(all_files)
-            if not SKIP_PROGRESSBAR_WINDOWS:
-                progress_win, label_op, label_count, progress_bar = show_progress_modal(total, "Cleaning up files...")
             current = 0
             for f in all_files:
                 try:
@@ -957,11 +860,6 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
                 except Exception as e:
                     print(f"Error deleting {f}: {e}")
                 current += 1
-                if not SKIP_PROGRESSBAR_WINDOWS:
-                    update_progress(progress_bar, label_count, current, total)
-                    QApplication.processEvents()
-            if not SKIP_PROGRESSBAR_WINDOWS:
-                progress_win.close()
             detection_states.clear()
             del global_detections[:]
             selected_idx[0] = 0
@@ -1238,8 +1136,6 @@ while True:
         is_paused = True
         print("Entering Review Mode...")
         file_list = get_sorted_video_file_list(RECORDINGS_DIR)
-        if not SKIP_PROGRESSBAR_WINDOWS:
-            progress_win, label_op, label_count, progress_bar = show_progress_modal(len(file_list), "Generating recording CSVs")
         current = 0
         for f in file_list:
             if f.startswith("gesture_") and f.endswith(".mp4"):
@@ -1248,11 +1144,6 @@ while True:
                 if not os.path.exists(csv_path):
                     process_video_file(video_path)
             current += 1
-            if not SKIP_PROGRESSBAR_WINDOWS:
-                update_progress(progress_bar, label_count, current, len(file_list))
-                QApplication.processEvents()
-        if not SKIP_PROGRESSBAR_WINDOWS:
-            progress_win.close()
         print("Finished processing all gesture videos. Launching review window...")
         show_timeline_and_features()  # review window
         is_review = False    
