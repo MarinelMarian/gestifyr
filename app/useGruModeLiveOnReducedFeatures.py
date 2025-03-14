@@ -6,12 +6,13 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 import cv2
 from collections import deque
-from mediapipe_extract import extract_features_v2
+from mediapipe_extract import draw_landmarks_on_image, extract_features_v2
 from tools import clear_terminal
 import json
 import numpy as np
-from videoProcessingTools import get_angles, points_to_extract
+from videoProcessingTools import get_angles, overlayBar, overlayRoundedSquare, points_to_extract
 from dotenv import load_dotenv
+import icons as icons
 
 load_dotenv()
 BASE_PATH = os.getenv("BASE_PATH")
@@ -28,16 +29,7 @@ analyse_video_step_sec = (
 
 
 
-# ~~~~~~ init ~~~~~
-cap = cv2.VideoCapture(1)
-if not cap.isOpened():
-    print("Error: Could not open webcam.")
-# Get the frames per second (FPS) of the video
-# cap.set(cv2.CAP_PROP_EXPOSURE, 40)
-fps = cap.get(cv2.CAP_PROP_FPS)
-queue_frame_size = int(fps * queue_frame_size_sec)
-analyse_video_step = int(fps * analyse_video_step_sec)
-frame_queue = deque(maxlen=queue_frame_size)
+
 
 
 clear_terminal()
@@ -45,7 +37,7 @@ clear_terminal()
 
 # Model parameters
 metadata_filename = (
-    f"{BASE_PATH}{APP_REL_PATH}model/processed_trimmed/gru_64_3_0.1_5/info_model.txt"
+    f"{BASE_PATH}{APP_REL_PATH}model/gru_64_3_0.01_5/info_model.txt"
 )
 with open(metadata_filename, "r") as file:
     data = json.load(file)
@@ -55,7 +47,7 @@ output_size = data["output_size"]
 num_layers = data["num_layers"]
 saved_model_file_name = f"{BASE_PATH}{data['model_file']}"
 saved_scaler_file_name = f"{BASE_PATH}{data['scaler_file']}"
-labels = ["da", "nu ", "gura casca", "ridicat", "nimic"]
+labels = ["da", "nu ", "openMouth", "eyebrows up", "blink", "smile"," nimic"]
 print(
     f"Loaded input_size={input_size}, hidden_size={hidden_size}, output_size={output_size}, num_layers={num_layers}, model_file={saved_model_file_name}"
 )
@@ -86,62 +78,114 @@ scaler = joblib.load(saved_scaler_file_name)
 
 print("Model loaded successfully!")
 
-cap = cv2.VideoCapture(1)  # Open the default webcam
-cap.set(cv2.CAP_PROP_EXPOSURE, 40)  # Increase exposure
-if not cap.isOpened():
-    print("Error: Could not open webcam.")
+def initialize_webcam(camera_device_id):
+    cap = cv2.VideoCapture(camera_device_id)
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+    # ~~~~~~ init ~~~~~
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+    # Get the frames per second (FPS) of the video
+    # cap.set(cv2.CAP_PROP_EXPOSURE, 40)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    queue_frame_size = int(fps * queue_frame_size_sec)
+    analyse_video_step = int(fps * analyse_video_step_sec)
+    frame_queue = deque(maxlen=queue_frame_size)
+    return (cap, fps, queue_frame_size, analyse_video_step, frame_queue)
+
+camera_device_id = 0
+# Initialize webcam
+(cap, fps, queue_frame_size, analyse_video_step, frame_queue) = initialize_webcam(camera_device_id)
+
 idx = 0
+mask_on = False
+sound_on = False
+probValues = [0,0,0,0,0,0,0]
+
 while True:
     ret, frame = cap.read()
-    idx = idx + 1
-    # print(idx)
     if not ret:
-        print("Error: Could not read frame.")
-        break
-    result_features = extract_features_v2(frame)
-    if len(result_features.face_blendshapes) == 0:
-        continue
-    raw_features = [
-        coord
-        for point in result_features.face_landmarks[0]
-        for coord in (point.x, point.y, point.z)
-    ]
-    processed_features = [c.score for c in result_features.face_blendshapes[0]]
-    features_reduced = [processed_features[i] for i in points_to_extract]
-    x, y = get_angles(raw_features)
-    features_reduced.append(x)
-    features_reduced.append(y)
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+        frame = overlayRoundedSquare(frame, (50, 290), (120, 100), "", f"Camera {camera_device_id}", isActive = False)
+        text = "Camera not detected, Select another camera (0-6)"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 1.5
+        font_thickness = 3
+        text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+        text_x = (frame.shape[1] - text_size[0]) // 2
+        text_y = (frame.shape[0] + text_size[1] + 100) // 2
+        cv2.putText(frame, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
 
-    frame_queue.append(features_reduced)
+    else:
+        img_w, img_h, _ = frame.shape
 
-    # Optional: Display the frame
+        result_features = extract_features_v2(frame)
+        frame = draw_landmarks_on_image(frame,result_features) if mask_on else frame
+
+        if len(result_features.face_blendshapes) == 0:
+            continue
+        raw_features = [
+            coord
+            for point in result_features.face_landmarks[0]
+            for coord in (point.x, point.y, point.z)
+        ]
+        processed_features = [c.score for c in result_features.face_blendshapes[0]]
+        reduced_features_row = [processed_features[i] for i in points_to_extract]
+
+        x, y = get_angles(raw_features, img_w, img_h)
+        features_reduced = ([y / 90, x / 90, *reduced_features_row])
+
+        frame_queue.append(features_reduced)
+        frame = overlayRoundedSquare(frame, (50, 50), (120, 100), "Mask ON", "Mask OFF", mask_on)
+        frame = overlayRoundedSquare(frame, (50, 170), (120, 100), "Sound ON", "Sound OFF", sound_on)
+        frame = overlayRoundedSquare(frame, (50, 290), (120, 100), f"Camera {camera_device_id}")
+        
+        idx = idx + 1
+    
+        if idx % analyse_video_step == 0:
+
+            features_to_test = torch.tensor(
+                scaler.transform(frame_queue), dtype=torch.float32
+            ).unsqueeze(0)
+            # predict
+            with torch.no_grad():
+
+                # inputs = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True)
+                outputs = loaded_model(features_to_test)
+                # Apply softmax to get probabilities
+                probabilities = F.softmax(outputs, dim=1)
+                # print(probabilities)
+                # Get predicted class and confidence
+                predicted_class = torch.argmax(probabilities, dim=1)
+                confidence = torch.max(probabilities, dim=1).values
+
+                predicted_label = labels[predicted_class.item()]
+
+                # if confidence.item() > 0.8:
+                print(
+                    f"Predicted Gesture: {predicted_label}, Confidence: {confidence.item():.4f}"
+                )
+                probValues = probabilities.tolist()[0]
+        frame = overlayBar( frame, position_idx = 1, value = probValues[0], icon_image = icons.icon_nod , threshold = 0.53)
+        frame = overlayBar( frame, position_idx = 2, value = probValues[1], icon_image = icons.icon_shake , threshold = 0.5)
+        frame = overlayBar( frame, position_idx = 3, value = probValues[2], icon_image = icons.icon_open_mouth , threshold = 0.5)
+        frame = overlayBar( frame, position_idx = 4, value = probValues[3], icon_image = icons.icon_raise_eyebrows , threshold = 0.5)
+        frame = overlayBar( frame, position_idx = 6, value = probValues[4], icon_image = icons.icon_eyes_shut , threshold = 0.5)  
+        frame = overlayBar( frame, position_idx = 5, value = probValues[5], icon_image = icons.icon_smile , threshold = 0.5)
     cv2.imshow("Capturing Frames", frame)
-    if cv2.waitKey(1) & 0xFF == ord("q"):
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('q'):
         break
-    if idx % analyse_video_step == 0:
-
-        features_to_test = torch.tensor(
-            scaler.transform(frame_queue), dtype=torch.float32
-        ).unsqueeze(0)
-        # predict
-        with torch.no_grad():
-
-            # inputs = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True)
-            outputs = loaded_model(features_to_test)
-            # Apply softmax to get probabilities
-            probabilities = F.softmax(outputs, dim=1)
-            # print(probabilities)
-            # Get predicted class and confidence
-            predicted_class = torch.argmax(probabilities, dim=1)
-            confidence = torch.max(probabilities, dim=1).values
-            # print(f'propabilities:{probabilities}')
-
-            predicted_label = labels[predicted_class.item()]
-
-            # if confidence.item() > 0.8:
-            print(
-                f"Predicted Gesture: {predicted_label}, Confidence: {confidence.item():.4f}"
-            )
+    elif key == ord('m'):
+        mask_on = not mask_on  # Toggle mask_on flag
+    elif key == ord('s'):
+        sound_on = not sound_on
+    elif key in [ord('0'), ord('1'), ord('2'), ord('3'), ord('4'), ord('5'), ord('6')]:
+        camera_device_id = int(chr(key))
+        cap.release()  # Release the current capture
+        (cap, fps, queue_frame_size, analyse_video_step, frame_queue) = initialize_webcam(camera_device_id)  # Switch to the new camera
 
 
 cap.release()
