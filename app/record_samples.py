@@ -79,6 +79,8 @@ gesture_phase_start = time.time()
 
 # Initialize webcam
 cap = cv2.VideoCapture(WEBCAM_INDEX)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
@@ -736,7 +738,7 @@ def playback_detection_video(detection, detections_dir, fps):
         if not ret:
             break
         cv2.imshow(window_name, frame)
-        key = cv2.waitKey(30) & 0xFF
+        key = cv2.waitKey(33) & 0xFF
         if key == ord(" "):
             break
     cv2.waitKey(1000)
@@ -1219,7 +1221,7 @@ while True:
 
     cv2.imshow("Webcam Feed", frame)
 
-    key = cv2.waitKey(30) & 0xFF
+    key = cv2.waitKey(1) & 0xFF
 
     # If help key is pressed, show help window.
     if key == ord("h"):
