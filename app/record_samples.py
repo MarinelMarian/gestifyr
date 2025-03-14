@@ -15,6 +15,7 @@ import tkinter as tk
 from tkinter import ttk
 from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QProgressBar, QListWidget, QPushButton
 import sys
+from videoProcessingTools import points_to_extract
 
 
 from videoProcessingTools import get_angles
@@ -268,7 +269,6 @@ def process_video_file(video_path):
     cap_vid.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     # Define points to extract; same indices as in your parseVideo.py for inspiration.
-    points_to_extract = [4, 5, 25, 9, 10, 44, 45]
 
     all_features = []
     frame_nr = 0
