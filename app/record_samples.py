@@ -738,7 +738,7 @@ def playback_detection_video(detection, detections_dir, fps):
         if not ret:
             break
         cv2.imshow(window_name, frame)
-        key = cv2.waitKey(33) & 0xFF
+        key = cv2.waitKey(3) & 0xFF
         if key == ord(" "):
             break
     cv2.waitKey(1000)
