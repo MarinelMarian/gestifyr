@@ -186,18 +186,6 @@ cv2.resizeWindow(WINDOW_NAME, display_frame_width, display_frame_height)
 is_paused = True
 is_review = False
 
-def play_recording_in_progress(stop_event):
-    """
-    Loops playing recording_in_progress.mp3 until stop_event is set.
-    """
-    sound_path = f"{BASE_PATH}{APP_REL_PATH}{SOUNDS_DIR}/recording_in_progress.mp3"
-    while not stop_event.is_set():
-        try:
-            playsound(sound_path)
-        except Exception as e:
-            print(f"Error playing recording_in_progress sound: {e}")
-            break
-        
 def show_progress_modal(total, operation_text):
     """
     Create a modal progress window using PySide6 that:
@@ -230,7 +218,7 @@ def show_progress_modal(total, operation_text):
     dialog.resize(400, 150)
     dialog.show()
     app.processEvents()  # Ensure the dialog appears
-    return dialog, label_op, label_count, progress_bar
+    return dialog, label_count, progress_bar
 
 
 def update_progress(progress_bar, label_count, current, total):
@@ -363,6 +351,7 @@ def process_video_file(video_path):
         <video filename without extension>.csv
     For inspiration, this function reuses similar processing as seen in parseVideo.py.
     """
+    base_filename = os.path.splitext(os.path.basename(video_path))[0]
     cap_vid = cv2.VideoCapture(video_path)
     if not cap_vid.isOpened():
         print(f"Error: Could not open video {video_path}")
@@ -390,18 +379,35 @@ def process_video_file(video_path):
         if not ret:
             break
         result_features = extract_features_v2(frame)
-        # Get scores from face blendshapes.
-        processed_features_row = [c.score for c in result_features.face_blendshapes[0]]
-        # Select features of interest.
-        reduced_features_row = [processed_features_row[i] for i in points_to_extract]
-        # Process face landmarks into a flat array.
-        raw_array = np.array(
-            [[el.x, el.y, el.z] for el in result_features.face_landmarks[0]]
-        )
-        raw_array_row = raw_array.reshape(-1)
-        # Get angles
-        x, y = get_angles(raw_array_row, img_w, img_h)
-        all_features.append([y / 90, x / 90, *reduced_features_row])
+        has_features = result_features.face_blendshapes and result_features.face_blendshapes[0]
+        has_landmarks = result_features.face_landmarks and result_features.face_landmarks[0] 
+
+        if not has_features and not has_landmarks:
+            cv2.imwrite(f"{SKIPPED_DIR}/{base_filename}_frame{frame_nr}.jpg", frame)
+            print(f"Skipping frame {frame_nr} - No features or landmarks found")
+            continue
+
+        if has_features:
+            # Get scores from face blendshapes.
+            processed_features_row = [c.score for c in result_features.face_blendshapes[0]]
+            reduced_features_row = [processed_features_row[i] for i in points_to_extract]
+        else:
+            print(f"No features found in frame {frame_nr}")
+            reduced_features_row = [0 for _ in points_to_extract]
+            
+        if has_landmarks:
+            # Process face landmarks into a flat array.
+            raw_array = np.array(
+                [[el.x, el.y, el.z] for el in result_features.face_landmarks[0]]
+            )
+            raw_array_row = raw_array.reshape(-1)
+            # Get angles
+            x, y = get_angles(raw_array_row, img_w, img_h)
+            all_features.append([y / 90, x / 90, *reduced_features_row])
+        else:
+            print(f"No face landmarks found in frame {frame_nr}")
+            all_features.append([0, 0, *reduced_features_row])
+
         frame_nr += 1
 
     cap_vid.release()
@@ -1103,6 +1109,35 @@ def interactive_feature_plot(
 
     def on_key(event):
         global is_review
+        if event.key == "x":
+            # Cleanup operation: delete files from "detections" and the output directory.
+            folders = [DETECTIONS_DIR, output_dir]
+            all_files = []
+            for folder in folders:
+                all_files.extend(glob.glob(os.path.join(folder, "*")))
+            total = len(all_files)
+            if not SKIP_PROGRESSBAR_WINDOWS:
+                progress_win, label_count, progress_bar = show_progress_modal(
+                    total, "Cleaning up files..."
+                )
+            current = 0
+            for f in all_files:
+                try:
+                    os.remove(f)
+                except Exception as e:
+                    print(f"Error deleting {f}: {e}")
+                current += 1
+                if not SKIP_PROGRESSBAR_WINDOWS:
+                    update_progress(progress_bar, label_count, current, total)
+                    QApplication.processEvents()
+            if not SKIP_PROGRESSBAR_WINDOWS:
+                progress_win.close()
+            detection_states.clear()
+            del global_detections[:]
+            selected_idx[0] = 0
+            plt.close(fig)
+            is_review = False
+            print("Cleanup complete. Ready for new recordings.")
         if not global_detections:
             return
         if event.key == "left":
@@ -1125,7 +1160,7 @@ def interactive_feature_plot(
             # Process: copy all detections marked save or skip
             total = len(global_detections)
             if not SKIP_PROGRESSBAR_WINDOWS:
-                progress_win, label_op, label_count, progress_bar = show_progress_modal(
+                progress_win, label_count, progress_bar = show_progress_modal(
                     total, "Copying detections..."
                 )
             for idx, detection in enumerate(global_detections):
@@ -1159,35 +1194,6 @@ def interactive_feature_plot(
             if not SKIP_PROGRESSBAR_WINDOWS:
                 progress_win.close()
             show_saved_samples_window(SAMPLES_DIR, SKIPPED_DIR)
-        elif event.key == "x":
-            # Cleanup operation: delete files from "detections" and the output directory.
-            folders = [DETECTIONS_DIR, output_dir]
-            all_files = []
-            for folder in folders:
-                all_files.extend(glob.glob(os.path.join(folder, "*")))
-            total = len(all_files)
-            if not SKIP_PROGRESSBAR_WINDOWS:
-                progress_win, label_op, label_count, progress_bar = show_progress_modal(
-                    total, "Cleaning up files..."
-                )
-            current = 0
-            for f in all_files:
-                try:
-                    os.remove(f)
-                except Exception as e:
-                    print(f"Error deleting {f}: {e}")
-                current += 1
-                if not SKIP_PROGRESSBAR_WINDOWS:
-                    update_progress(progress_bar, label_count, current, total)
-                    QApplication.processEvents()
-            if not SKIP_PROGRESSBAR_WINDOWS:
-                progress_win.close()
-            detection_states.clear()
-            del global_detections[:]
-            selected_idx[0] = 0
-            plt.close(fig)
-            is_review = False
-            print("Cleanup complete. Ready for new recordings.")
         elif event.key == " ":
             detection = global_detections[selected_idx[0]]
             playback_detection_video(
@@ -1317,19 +1323,29 @@ def show_timeline_and_features():
 
 def draw_record_pause_symbol(frame, is_paused):
     """
-    Instead of a play symbol, when recording (i.e. not paused) display a full red circle.
-    When paused, display the pause symbol as before.
+    Instead of a play symbol, when recording (i.e. not paused) display a full circle.
+    When paused, display the pause symbol.
+    If a pause is pending (pending_pause is True), alternate the color between red and gray.
     """
+    global pending_pause  # so we can read its value
     pil_im = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     draw = ImageDraw.Draw(pil_im)
 
-    # If recording is active (not paused), display a red full circle; else, display pause symbol.
+    # Choose symbol and color based on state.
+    symbol = "●"  # We'll use the full circle for both states.
     if not is_paused:
-        symbol = "●"  # Unicode full circle (U+25CF)
-        color = (255, 0, 0)  # Red color
+        # When recording active, use red normally...
+        current_color = (255, 0, 0)
+        # ...but if a pause is pending, alternate the color.
+        if pending_pause:
+            # Toggle color every 0.5 sec.
+            if int(time.time() * 2) % 2 == 0:
+                current_color = (255, 0, 0)
+            else:
+                current_color = (128, 128, 128)
     else:
-        symbol = "●"  # Pause symbol
-        color = (128, 128, 128)  # Gray color
+        # When paused, use gray.
+        current_color = (128, 128, 128)
 
     font_size = 40
     try:
@@ -1345,9 +1361,8 @@ def draw_record_pause_symbol(frame, is_paused):
     x = (w - text_w) // 2
     y = h - overlay_height + (overlay_height - text_h) // 2
 
-    draw.text((x, y), symbol, font=font, fill=color)
+    draw.text((x, y), symbol, font=font, fill=current_color)
     return cv2.cvtColor(np.array(pil_im), cv2.COLOR_RGB2BGR)
-
 
 def get_sort_key(f):
     parts = f.rsplit("_", 2)
@@ -1363,6 +1378,7 @@ def get_sorted_video_file_list(output_dir, get_sort_key_func=get_sort_key):
 
 # Global flag to ensure we only play the gesture sound once per gesture.
 gesture_sound_played = False
+pending_pause = False  # New flag to defer pausing during 'display' phase
 
 # Main loop
 while True:
@@ -1461,10 +1477,9 @@ while True:
                 if elapsed >= GESTURE_DISPLAY_DURATION:
                     gesture_phase = "wait"
                     gesture_phase_start = now
-                    # Reset the gesture sound flag for the next gesture.
-                    gesture_sound_played = False
+                    gesture_sound_played = False  # Reset for next gesture
 
-                    # Stop recording_in_progress sound.
+                    # Stop the recording_in_progress sound.
                     if rec_progress_playing:
                         rec_progress_sound.stop()
                         rec_progress_playing = False
@@ -1483,6 +1498,13 @@ while True:
                         )
                         os.rename(temp_file, final_file)
                         print(f"Saved recording: {final_file}")
+
+                    # If a pause was requested during recording, now pause.
+                    if pending_pause:
+                        is_paused = True
+                        pending_pause = False
+                        print("Paused after gesture completion.")
+                        current_gesture_index = (current_gesture_index + 1) % len(GESTURES)
 
             else:  # wait phase
                 if elapsed >= GESTURE_WAIT_DURATION:
@@ -1540,21 +1562,26 @@ while True:
         show_help_window()
         # Returning from the help window will resume the previous window (which now displays the frozen frame).
     elif key == ord(" "):  # Toggle pause/recording.
-        is_paused = not is_paused
         if is_paused:
-            # If pausing during recording, stop the recording_in_progress sound.
-            if rec_progress_playing:
-                rec_progress_sound.stop()
-                rec_progress_playing = False
-            print("Paused.")
-        else:
-            # When resuming, first play quiet_1_second.wav.
+            # When resuming, first play quiet_1_second.wav (beep) then start recording.
+            is_paused = False
             if beep is not None:
                 beep.play()
-                time.sleep(1)  # Wait one second for the quiet sound to finish
+                time.sleep(1)  # Wait for quiet sound to finish.
             gesture_phase = "display"
             gesture_phase_start = time.time()
+            pending_pause = False  # Clear pause request.
             print("Recording...")
+        else:
+            # If currently recording (not paused)
+            if gesture_phase == "display":
+                # Defer pause until current gesture finishes.
+                pending_pause = True
+                print("Will pause after current gesture finishes...")
+            else:
+                # If in 'wait' phase, we can pause immediately.
+                is_paused = True
+                print("Paused.")
     elif key == ord("r"):
         # Enter review mode.
         is_review = True
@@ -1562,7 +1589,7 @@ while True:
         print("Entering Review Mode...")
         file_list = get_sorted_video_file_list(RECORDINGS_DIR)
         if not SKIP_PROGRESSBAR_WINDOWS:
-            progress_win, label_op, label_count, progress_bar = show_progress_modal(
+            progress_win, label_count, progress_bar = show_progress_modal(
                 len(file_list), "Generating recording CSVs"
             )
         current = 0
