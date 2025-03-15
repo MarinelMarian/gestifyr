@@ -4,7 +4,7 @@
             "angleUpDown"
         ],
         "name": "nod",
-        "threshold": 0.020,
+        "threshold": 0.005,
         "duration": 1000
     },
     "shake": {
@@ -12,7 +12,7 @@
             "angleLeftRight"
         ],
         "name": "shake",
-        "threshold": 0.020,
+        "threshold": 0.005,
         "duration": 1000
     },
     "mouth": {
