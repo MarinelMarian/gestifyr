@@ -4,7 +4,7 @@
             "angleUpDown"
         ],
         "name": "nod",
-        "threshold": 0.025,
+        "threshold": 0.020,
         "duration": 1000
     },
     "shake": {
@@ -12,7 +12,7 @@
             "angleLeftRight"
         ],
         "name": "shake",
-        "threshold": 0.025,
+        "threshold": 0.020,
         "duration": 1000
     },
     "mouth": {
@@ -20,7 +20,7 @@
             "jawOpen"
         ],
         "name": "mouth",
-        "threshold": 0.2,
+        "threshold": 0.15,
         "duration": 1000
     },
     "eyebrows": {
@@ -38,7 +38,7 @@
             "eyeBlinkRight"
         ],
         "name": "blink",
-        "threshold": 0.3,
+        "threshold": 0.15,
         "duration": 2000
     },
     "smile": {
@@ -47,7 +47,7 @@
             "smileRight"
         ],
         "name": "smile",
-        "threshold": 0.05,
+        "threshold": 0.025,
         "duration": 2000
     },
     "none": {
