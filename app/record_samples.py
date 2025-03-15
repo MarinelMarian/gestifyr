@@ -21,8 +21,6 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 import sys
-import threading
-from playsound import playsound
 import pygame
 
 
@@ -32,7 +30,7 @@ from tools import write_to_csv
 from dotenv import load_dotenv
 
 # Initialize pygame mixer once (perhaps near your other global initializations)
-pygame.mixer.init()
+pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
 
 load_dotenv()
 BASE_PATH = os.getenv("BASE_PATH")
@@ -77,6 +75,67 @@ SAMPLES_DIR = "samples"
 os.makedirs(SAMPLES_DIR, exist_ok=True)
 SKIPPED_DIR = "skipped"
 os.makedirs(SKIPPED_DIR, exist_ok=True)
+
+# Preload gesture sounds using pygame
+preloaded_gesture_sounds = {}
+for gesture in GESTURES:
+    gesture_name = gestures_dict.get(gesture, {}).get("name", gesture)
+    sound_file = os.path.join(BASE_PATH, APP_REL_PATH, SOUNDS_DIR, f"{gesture_name}.wav")
+    if os.path.exists(sound_file):
+        try:
+            sound = pygame.mixer.Sound(sound_file)
+            preloaded_gesture_sounds[gesture] = sound
+            # Aggressively warm up the sound.
+            current_volume = sound.get_volume()
+            sound.set_volume(0)
+            for _ in range(2):  # Do two dummy plays.
+                channel = sound.play()
+                pygame.time.delay(150)  # 150ms delay
+                if channel:
+                    channel.stop()
+            sound.set_volume(current_volume)
+        except Exception as e:
+            print(f"Error loading {sound_file}: {e}")
+    else:
+        print(f"Sound file not found: {sound_file}")
+
+# Preload the recording_in_progress sound.
+rec_progress_sound_file = os.path.join(BASE_PATH, APP_REL_PATH, SOUNDS_DIR, "recording_in_progress.wav")
+if os.path.exists(rec_progress_sound_file):
+    try:
+        rec_progress_sound = pygame.mixer.Sound(rec_progress_sound_file)
+        # Warm up this sound as well.
+        current_volume = rec_progress_sound.get_volume()
+        rec_progress_sound.set_volume(0)
+        rec_progress_sound.play()
+        pygame.time.delay(50)
+        rec_progress_sound.stop()
+        rec_progress_sound.set_volume(current_volume)
+    except Exception as e:
+        print(f"Error loading {rec_progress_sound_file}: {e}")
+        rec_progress_sound = None
+else:
+    rec_progress_sound = None
+
+beep_file = os.path.join(BASE_PATH, APP_REL_PATH, SOUNDS_DIR, "beep_1_second.wav")
+if os.path.exists(beep_file):
+    try:
+        beep = pygame.mixer.Sound(beep_file)
+        # Warm up quiet sound.
+        current_volume = beep.get_volume()
+        beep.set_volume(0)
+        beep.play()
+        pygame.time.delay(150)  # 150ms delay to warm up
+        beep.stop()
+        beep.set_volume(current_volume)
+    except Exception as e:
+        print(f"Error loading {beep_file}: {e}")
+        beep = None
+else:
+    beep = None
+    
+# Global flag to control looping recording sound.
+rec_progress_playing = False
 
 # Global state for interactive review.
 # List of detections; each detection is (global_x0, global_x1, csv_filename)
@@ -1325,25 +1384,20 @@ while True:
             elapsed = now - gesture_phase_start
 
             if gesture_phase == "display":
-                # If it's a new gesture, play its gesture sound once.
+                # If it's a new gesture, play its gesture sound once using pygame.
                 if not gesture_sound_played:
-                    gesture_name = gestures_dict[GESTURES[current_gesture_index]]["name"]
-                    threading.Thread(
-                        target=playsound,
-                        args=(f"{BASE_PATH}{APP_REL_PATH}{SOUNDS_DIR}/{gesture_name}.mp3",),
-                        daemon=True,
-                    ).start()
+                    gesture = GESTURES[current_gesture_index]
+                    sound = preloaded_gesture_sounds.get(gesture)
+                    if sound:
+                        sound.play()
+                    else:
+                        print(f"No sound loaded for gesture {gesture}")
                     gesture_sound_played = True
 
                 # Start recording_in_progress sound if not already playing.
-                if recording_in_progress_thread is None:
-                    recording_in_progress_stop_event = threading.Event()
-                    recording_in_progress_thread = threading.Thread(
-                        target=play_recording_in_progress,
-                        args=(recording_in_progress_stop_event,),
-                        daemon=True,
-                    )
-                    recording_in_progress_thread.start()
+                if (not rec_progress_playing) and (rec_progress_sound is not None):
+                    rec_progress_sound.play()
+                    rec_progress_playing = True
 
                 if video_writer is None:
                     temp_timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -1359,9 +1413,7 @@ while True:
                             (recording_frame_width, recording_frame_height),
                         )
                     gesture_frame_count = 0
-                    print(
-                        f"Recording gesture {gestures_dict[GESTURES[current_gesture_index]]['name']}..."
-                    )
+                    print(f"Recording gesture {gestures_dict[GESTURES[current_gesture_index]]['name']}...")
 
                 if video_writer is not None:
                     video_writer.write(original_frame)
@@ -1389,14 +1441,10 @@ while True:
                 )
 
                 # Display gesture name centered on displayed frame.
-                gesture_text = gestures_dict[GESTURES[current_gesture_index]][
-                    "name"
-                ].capitalize()
+                gesture_text = gestures_dict[GESTURES[current_gesture_index]]["name"].capitalize()
                 gesture_font_scale = 2
                 gesture_thickness = 3
-                text_size, _ = cv2.getTextSize(
-                    gesture_text, gesture_font, gesture_font_scale, gesture_thickness
-                )
+                text_size, _ = cv2.getTextSize(gesture_text, gesture_font, gesture_font_scale, gesture_thickness)
                 gesture_text_x = (display_frame_width - text_size[0]) // 2
                 gesture_text_y = display_frame_height // 2
                 cv2.putText(
@@ -1416,11 +1464,9 @@ while True:
                     gesture_sound_played = False
 
                     # Stop recording_in_progress sound.
-                    if recording_in_progress_thread is not None:
-                        recording_in_progress_stop_event.set()
-                        recording_in_progress_thread.join()
-                        recording_in_progress_thread = None
-                        recording_in_progress_stop_event = None
+                    if rec_progress_playing:
+                        rec_progress_sound.stop()
+                        rec_progress_playing = False
 
                     if video_writer is not None:
                         video_writer.release()
@@ -1503,6 +1549,11 @@ while True:
                 recording_in_progress_stop_event = None
             print("Paused.")
         else:
+            # When resuming, first play quiet_1_second.wav.
+            if beep is not None:
+                # preloaded_gesture_sounds["nod"].play()
+                beep.play()
+                time.sleep(1)  # Wait one second for the quiet sound to finish
             gesture_phase = "display"
             gesture_phase_start = time.time()
             print("Recording...")
