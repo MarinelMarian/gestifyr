@@ -1,10 +1,12 @@
 import json
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 import PySide6
-import cv2
 import numpy as np
 import datetime as dt
 import os
+os.environ["OPENCV_FFMPEG_DEBUG"] = "0"  # Disable FFMPEG debug logging
+os.environ["OPENCV_LOG_LEVEL"] = "ERROR"  # Disable OpenCV logging
+import cv2
 import time
 import matplotlib.pyplot as plt
 import csv
@@ -46,7 +48,6 @@ SKIP_PROGRESSBAR_WINDOWS = int(os.getenv("SKIP_PROGRESSBAR_WINDOWS") or 0)
 # Set current working directory to the app folder
 os.chdir(BASE_PATH + APP_REL_PATH)
 
-os.environ["OPENCV_FFMPEG_DEBUG"] = "0"  # Disable FFMPEG debug logging
 # Try to suppress logging if supported.
 try:
     cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
@@ -61,6 +62,7 @@ with open("gestures.json", "r") as f:
 GESTURES = ["nod", "shake", "mouth", "eyebrows", "blink", "smile", "none"]
 
 current_gesture_index = 0
+
 # We'll remove manual recording toggling as recording is automatic per gesture
 video_writer = None
 gesture_frame_count = 0
@@ -166,8 +168,6 @@ fps = cap.get(cv2.CAP_PROP_FPS)
 fourcc = cv2.VideoWriter_fourcc(
     *VIDEO_ENCODER_FOURCC
 )  # avc1 works on MacOS, mp4v works on Windows
-recording_in_progress_thread = None
-recording_in_progress_stop_event = None
 
 # Define display settings
 display_frame_width = 640
@@ -1416,7 +1416,8 @@ while True:
                     print(f"Recording gesture {gestures_dict[GESTURES[current_gesture_index]]['name']}...")
 
                 if video_writer is not None:
-                    video_writer.write(original_frame)
+                    with open(os.devnull, "w") as devnull, redirect_stderr(devnull), redirect_stdout(devnull):
+                        video_writer.write(original_frame)
                     gesture_frame_count += 1
 
                 # Draw progress bar ...
@@ -1542,16 +1543,13 @@ while True:
         is_paused = not is_paused
         if is_paused:
             # If pausing during recording, stop the recording_in_progress sound.
-            if recording_in_progress_thread is not None:
-                recording_in_progress_stop_event.set()
-                recording_in_progress_thread.join()
-                recording_in_progress_thread = None
-                recording_in_progress_stop_event = None
+            if rec_progress_playing:
+                rec_progress_sound.stop()
+                rec_progress_playing = False
             print("Paused.")
         else:
             # When resuming, first play quiet_1_second.wav.
             if beep is not None:
-                # preloaded_gesture_sounds["nod"].play()
                 beep.play()
                 time.sleep(1)  # Wait one second for the quiet sound to finish
             gesture_phase = "display"
