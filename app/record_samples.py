@@ -23,12 +23,16 @@ from PySide6.QtWidgets import (
 import sys
 import threading
 from playsound import playsound
+import pygame
 
 
 from videoProcessingTools import get_angles
 from mediapipe_extract import extract_features_v2
 from tools import write_to_csv
 from dotenv import load_dotenv
+
+# Initialize pygame mixer once (perhaps near your other global initializations)
+pygame.mixer.init()
 
 load_dotenv()
 BASE_PATH = os.getenv("BASE_PATH")
@@ -103,6 +107,8 @@ fps = cap.get(cv2.CAP_PROP_FPS)
 fourcc = cv2.VideoWriter_fourcc(
     *VIDEO_ENCODER_FOURCC
 )  # avc1 works on MacOS, mp4v works on Windows
+recording_in_progress_thread = None
+recording_in_progress_stop_event = None
 
 # Define display settings
 display_frame_width = 640
@@ -121,7 +127,18 @@ cv2.resizeWindow(WINDOW_NAME, display_frame_width, display_frame_height)
 is_paused = True
 is_review = False
 
-
+def play_recording_in_progress(stop_event):
+    """
+    Loops playing recording_in_progress.mp3 until stop_event is set.
+    """
+    sound_path = f"{BASE_PATH}{APP_REL_PATH}{SOUNDS_DIR}/recording_in_progress.mp3"
+    while not stop_event.is_set():
+        try:
+            playsound(sound_path)
+        except Exception as e:
+            print(f"Error playing recording_in_progress sound: {e}")
+            break
+        
 def show_progress_modal(total, operation_text):
     """
     Create a modal progress window using PySide6 that:
@@ -1308,19 +1325,25 @@ while True:
             elapsed = now - gesture_phase_start
 
             if gesture_phase == "display":
-                # If it's a new gesture, play its sound once.
+                # If it's a new gesture, play its gesture sound once.
                 if not gesture_sound_played:
-                    gesture_name = gestures_dict[GESTURES[current_gesture_index]][
-                        "name"
-                    ]
+                    gesture_name = gestures_dict[GESTURES[current_gesture_index]]["name"]
                     threading.Thread(
                         target=playsound,
-                        args=(
-                            f"{BASE_PATH}{APP_REL_PATH}{SOUNDS_DIR}/{gesture_name}.mp3",
-                        ),
+                        args=(f"{BASE_PATH}{APP_REL_PATH}{SOUNDS_DIR}/{gesture_name}.mp3",),
                         daemon=True,
                     ).start()
                     gesture_sound_played = True
+
+                # Start recording_in_progress sound if not already playing.
+                if recording_in_progress_thread is None:
+                    recording_in_progress_stop_event = threading.Event()
+                    recording_in_progress_thread = threading.Thread(
+                        target=play_recording_in_progress,
+                        args=(recording_in_progress_stop_event,),
+                        daemon=True,
+                    )
+                    recording_in_progress_thread.start()
 
                 if video_writer is None:
                     temp_timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -1389,14 +1412,20 @@ while True:
                 if elapsed >= GESTURE_DISPLAY_DURATION:
                     gesture_phase = "wait"
                     gesture_phase_start = now
-                    # Reset gesture sound flag for the next gesture.
+                    # Reset the gesture sound flag for the next gesture.
                     gesture_sound_played = False
+
+                    # Stop recording_in_progress sound.
+                    if recording_in_progress_thread is not None:
+                        recording_in_progress_stop_event.set()
+                        recording_in_progress_thread.join()
+                        recording_in_progress_thread = None
+                        recording_in_progress_stop_event = None
+
                     if video_writer is not None:
                         video_writer.release()
                         video_writer = None
-                        final_timestamp = dt.datetime.now().strftime(
-                            "%Y-%m-%d_%H-%M-%S"
-                        )
+                        final_timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                         temp_file = os.path.join(
                             RECORDINGS_DIR,
                             f"temp_gesture_{current_gesture_index}_{round(fps)}_{temp_timestamp}.mp4",
@@ -1465,10 +1494,18 @@ while True:
         # Returning from the help window will resume the previous window (which now displays the frozen frame).
     elif key == ord(" "):  # Toggle pause/recording.
         is_paused = not is_paused
-        if not is_paused:
+        if is_paused:
+            # If pausing during recording, stop the recording_in_progress sound.
+            if recording_in_progress_thread is not None:
+                recording_in_progress_stop_event.set()
+                recording_in_progress_thread.join()
+                recording_in_progress_thread = None
+                recording_in_progress_stop_event = None
+            print("Paused.")
+        else:
             gesture_phase = "display"
             gesture_phase_start = time.time()
-        print("Paused." if is_paused else "Recording...")
+            print("Recording...")
     elif key == ord("r"):
         # Enter review mode.
         is_review = True
