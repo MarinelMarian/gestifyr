@@ -11,8 +11,6 @@ import csv
 from PIL import ImageFont, ImageDraw, Image
 import shutil
 import glob
-import tkinter as tk
-from tkinter import ttk
 from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QProgressBar, QListWidget, QPushButton
 import sys
 
@@ -86,20 +84,26 @@ if not cap.isOpened():
     exit()
 
 # Get recording parameters from the webcam
-frame_width = int(cap.get(3))
-frame_height = int(cap.get(4))
+recording_frame_width = int(cap.get(3))
+recording_frame_height = int(cap.get(4))
 fps = cap.get(cv2.CAP_PROP_FPS)
 fourcc = cv2.VideoWriter_fourcc(*VIDEO_ENCODER_FOURCC)  # avc1 works on MacOS, mp4v works on Windows
+
+# Define display settings
+display_frame_width = 640
+display_frame_height = int(recording_frame_height * display_frame_width / recording_frame_width)
+font = cv2.FONT_HERSHEY_SIMPLEX
+gesture_font = cv2.FONT_HERSHEY_SIMPLEX
+WINDOW_NAME = "Webcam Feed"
+cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+cv2.resizeWindow(WINDOW_NAME, display_frame_width, display_frame_height)
+
 
 # When video is paused, show PLAY symbol and state is_paused True;
 # when playing, show PAUSE symbol.
 is_paused = True
 is_review = False
 
-font = cv2.FONT_HERSHEY_SIMPLEX
-gesture_font = cv2.FONT_HERSHEY_SIMPLEX
-
-cv2.namedWindow("Webcam Feed")
 
 def show_progress_modal(total, operation_text):
     """
@@ -708,11 +712,10 @@ def build_detections(csv_info, composite_info, fps, detection_interval):
         cumulative_feat_prev += seg_length
     return detections
 
-def playback_detection_video(detection, detections_dir, fps):
+def playback_detection_video(detection, detections_dir, width, height):
     """
-    Given a detection tuple (global_x0, global_x1, csv_filename), play
-    the corresponding video (derived from the CSV filename) in a separate window.
-    The window size is set to match the video frame size.
+    Given a detection tuple (csv_filename, ...), play the corresponding video (derived from the CSV filename)
+    in a separate window. The window size is set to the display dimensions. Playback occurs at the video's realtime frame rate.
     The playback auto-closes 1 second after the video ends or if space is pressed.
     """
     csv_fname = detection[2]
@@ -724,27 +727,35 @@ def playback_detection_video(detection, detections_dir, fps):
         return
     window_name = "Detection Playback"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    # Read first frame to set window size.
-    ret, frame = cap_vid.read()
-    if not ret:
-        cap_vid.release()
-        return
-    h, w = frame.shape[:2]
-    cv2.resizeWindow(window_name, w, h)
+    cv2.resizeWindow(window_name, width, height)
+    
+    # Get video's FPS and compute frame duration.
+    fps_vid = cap_vid.get(cv2.CAP_PROP_FPS)
+    if fps_vid <= 0:
+        fps_vid = 30
+    frame_duration = 1.0 / fps_vid
+
     # Reset playback position to the beginning.
     cap_vid.set(cv2.CAP_PROP_POS_FRAMES, 0)
     while True:
+        start_time = time.time()
         ret, frame = cap_vid.read()
         if not ret:
             break
+        # Resize the frame for display.
+        frame = cv2.resize(frame, (width, height))
         cv2.imshow(window_name, frame)
-        key = cv2.waitKey(3) & 0xFF
-        if key == ord(" "):
+        if cv2.waitKey(1) & 0xFF == ord(" "):
             break
+        # Ensure correct playback speed.
+        elapsed = time.time() - start_time
+        remaining = frame_duration - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
     cv2.waitKey(1000)
     cap_vid.release()
     cv2.destroyWindow(window_name)
-
+    
 # New helper: update the color for a given state.
 def get_detection_color(state):
     return {"none": "blue", "save": "green", "skip": "grey"}.get(state, "blue")
@@ -972,7 +983,7 @@ def interactive_feature_plot(timeline, boundaries, composite_height, all_feature
             print("Cleanup complete. Ready for new recordings.")
         elif event.key == " ":
             detection = global_detections[selected_idx[0]]
-            playback_detection_video(detection, DETECTIONS_DIR, fps)
+            playback_detection_video(detection, DETECTIONS_DIR, display_frame_width, display_frame_height)
         fig.canvas.draw_idle()
 
     def on_click(event):
@@ -1086,9 +1097,12 @@ def get_sorted_video_file_list(output_dir, get_sort_key_func=get_sort_key):
 
 # Main loop
 while True:
-    ret, frame = cap.read()
-    # Flip frame horizontally for a mirror effect.
-    frame = cv2.flip(frame, 1)
+    ret, original_frame = cap.read()
+    # Flip frame horizontally for mirror effect.
+    original_frame = cv2.flip(original_frame, 1)
+    # Resize the displayed frame to the display dimensions.
+    frame = cv2.resize(original_frame, (display_frame_width, display_frame_height))
+
 
     if not ret:
         print("Error: Could not read frame.")
@@ -1114,19 +1128,19 @@ while True:
                     )
                     with open(os.devnull, "w") as devnull, redirect_stderr(devnull):
                         video_writer = cv2.VideoWriter(
-                            temp_filename, fourcc, fps, (frame_width, frame_height)
+                            temp_filename, fourcc, fps, (recording_frame_width, recording_frame_height)
                         )
                     gesture_frame_count = 0
                     print(f"Recording gesture {gestures_dict[GESTURES[current_gesture_index]]['name']}...")
 
                 if video_writer is not None:
-                    video_writer.write(frame)
+                    video_writer.write(original_frame)
                     gesture_frame_count += 1
 
-                # Draw progress bar at top center.
+                # Draw progress bar using display dimensions.
                 pb_total_width = 300
                 pb_height = 5
-                pb_x = (frame_width - pb_total_width) // 2
+                pb_x = (display_frame_width - pb_total_width) // 2
                 pb_y = 10
                 pb_progress = int((elapsed / GESTURE_DISPLAY_DURATION) * pb_total_width)
                 cv2.rectangle(
@@ -1144,15 +1158,15 @@ while True:
                     -1,
                 )
 
-                # Display current gesture name.
+                # Display gesture name centered on displayed frame.
                 gesture_text = gestures_dict[GESTURES[current_gesture_index]]["name"].capitalize()
                 gesture_font_scale = 2
                 gesture_thickness = 3
                 text_size, _ = cv2.getTextSize(
                     gesture_text, gesture_font, gesture_font_scale, gesture_thickness
                 )
-                gesture_text_x = (frame_width - text_size[0]) // 2
-                gesture_text_y = frame_height // 2
+                gesture_text_x = (display_frame_width - text_size[0]) // 2
+                gesture_text_y = display_frame_height // 2
                 cv2.putText(
                     frame,
                     gesture_text,
@@ -1189,10 +1203,10 @@ while True:
 
     # Overlay: play/pause button at bottom.
     overlay_height = 50
-    overlay_y = frame_height - overlay_height
+    overlay_y = display_frame_height - overlay_height
     overlay = frame.copy()
     cv2.rectangle(
-        overlay, (0, overlay_y), (frame_width, frame_height), (50, 50, 50), -1
+        overlay, (0, overlay_y), (display_frame_width, display_frame_height), (50, 50, 50), -1
     )
     alpha = 0.6
     frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
@@ -1200,11 +1214,11 @@ while True:
     # After drawing the overlay, replace the play/pause symbol with a PIL-rendered version.
     frame = draw_record_pause_symbol(frame, is_paused)
 
-    # Display current gesture for debugging.
+    # Debug: display current gesture.
     cv2.putText(
         frame,
-        f"Gesture: {gestures_dict[GESTURES[current_gesture_index]]["name"]}",
-        (10, frame_height - 60),
+        f"Gesture: {gestures_dict[GESTURES[current_gesture_index]]['name']}",
+        (10, display_frame_height - 60),
         font,
         1,
         (255, 255, 255),
@@ -1215,11 +1229,11 @@ while True:
     help_text = "Press 'h' for help"
     (ts_width, ts_height), _ = cv2.getTextSize(help_text, font, 0.33, 1)
     margin = 10
-    text_x = frame_width - ts_width - margin
+    text_x = display_frame_width - ts_width - margin
     text_y = ts_height + margin
     cv2.putText(frame, help_text, (text_x, text_y), font, 0.33, (0, 0, 0), 1, cv2.LINE_AA)
 
-    cv2.imshow("Webcam Feed", frame)
+    cv2.imshow(WINDOW_NAME, frame)
 
     key = cv2.waitKey(1) & 0xFF
 
@@ -1261,8 +1275,7 @@ while True:
     elif key == ord("q") or key == 27:
         break
 
-    # If the webcam window is closed, exit.
-    if cv2.getWindowProperty("Webcam Feed", cv2.WND_PROP_VISIBLE) < 1:
+    if cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
         break
 
 # Clean up
