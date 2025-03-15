@@ -20,10 +20,10 @@ APP_REL_PATH = os.getenv("APP_REL_PATH")
 
 # ----- user params --------
 queue_frame_size_sec = (
-    1.5  # window length in seconds. This window will be the input to prediction
+    1  # window length in seconds. This window will be the input to prediction
 )
 analyse_video_step_sec = (
-    1  # in seconds, how much time should pass until next window is analyzed
+    0.5  # in seconds, how much time should pass until next window is analyzed
 )
 # ------------------------
 
@@ -85,6 +85,7 @@ def initialize_webcam(camera_device_id):
     # ~~~~~~ init ~~~~~
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+    cap.set(cv2.CAP_PROP_FPS, 30)
     if not cap.isOpened():
         print("Error: Could not open webcam.")
     # Get the frames per second (FPS) of the video
@@ -172,8 +173,8 @@ while True:
         frame = overlayBar( frame, position_idx = 2, value = probValues[1], icon_image = icons.icon_shake , threshold = 0.5)
         frame = overlayBar( frame, position_idx = 3, value = probValues[2], icon_image = icons.icon_open_mouth , threshold = 0.5)
         frame = overlayBar( frame, position_idx = 4, value = probValues[3], icon_image = icons.icon_raise_eyebrows , threshold = 0.5)
-        frame = overlayBar( frame, position_idx = 6, value = probValues[4], icon_image = icons.icon_eyes_shut , threshold = 0.5)  
-        frame = overlayBar( frame, position_idx = 5, value = probValues[5], icon_image = icons.icon_smile , threshold = 0.5)
+        frame = overlayBar( frame, position_idx = 5, value = probValues[4], icon_image = icons.icon_eyes_shut , threshold = 0.5)  
+        frame = overlayBar( frame, position_idx = 6, value = probValues[5], icon_image = icons.icon_smile , threshold = 0.5)
     cv2.imshow("Capturing Frames", frame)
     key = cv2.waitKey(1) & 0xFF
     if key == ord('q'):
