@@ -59,7 +59,7 @@ with open("gestures.json", "r") as f:
     gestures_dict = json.load(f)
 
 # Define gesture order (so that filenames use gesture index consistently).
-GESTURES = ["nod", "shake", "mouth", "eyebrows", "blink", "smile", "none", "none", "none"]
+GESTURES = ["nod", "shake", "mouth", "eyebrows", "blink", "smile", "none"]
 
 current_gesture_index = 0
 
