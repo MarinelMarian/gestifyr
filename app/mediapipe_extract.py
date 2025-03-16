@@ -5,6 +5,9 @@ import math
 from mediapipe.tasks.python import vision, BaseOptions
 import os
 from dotenv import load_dotenv
+from mediapipe import solutions
+from mediapipe.framework.formats import landmark_pb2
+from mediapipe.python.solutions.drawing_utils import DrawingSpec
 
 load_dotenv()
 BASE_PATH = os.getenv("BASE_PATH")
@@ -58,3 +61,42 @@ def get_movement_from_features(features_window, points_of_interest):
     delta_y = features_window[:, points_of_interest, 1].max(axis=0) - features_window[:, points_of_interest, 1].min(axis=0)
     delta_z = features_window[:, points_of_interest, 2].max(axis=0) - features_window[:, points_of_interest, 2].min(axis=0)
     return math.sqrt((delta_x ** 2).sum() + (delta_y ** 2).sum() + (delta_z ** 2).sum())
+
+def draw_landmarks_on_image(rgb_image, detection_result):
+  face_landmarks_list = detection_result.face_landmarks
+  annotated_image = np.copy(rgb_image)
+
+  # Loop through the detected faces to visualize.
+  for idx in range(len(face_landmarks_list)):
+    face_landmarks = face_landmarks_list[idx]
+
+    # Draw the face landmarks.
+    face_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
+    face_landmarks_proto.landmark.extend([
+      landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y, z=landmark.z) for landmark in face_landmarks
+    ])
+
+    solutions.drawing_utils.draw_landmarks(
+        image=annotated_image,
+        landmark_list=face_landmarks_proto,
+        connections=solutions.face_mesh.FACEMESH_TESSELATION,
+        landmark_drawing_spec=None,
+        # connection_drawing_spec=solutions.drawing_styles
+        # .get_default_face_mesh_tesselation_style())
+        connection_drawing_spec= DrawingSpec(color=(200,200,200), thickness=1))
+    solutions.drawing_utils.draw_landmarks(
+        image=annotated_image,
+        landmark_list=face_landmarks_proto,
+        connections=solutions.face_mesh.FACEMESH_CONTOURS,
+        landmark_drawing_spec=None,
+        connection_drawing_spec=solutions.drawing_styles
+        .get_default_face_mesh_contours_style())
+    solutions.drawing_utils.draw_landmarks(
+        image=annotated_image,
+        landmark_list=face_landmarks_proto,
+        connections=solutions.face_mesh.FACEMESH_IRISES,
+          landmark_drawing_spec=None,
+          connection_drawing_spec=solutions.drawing_styles
+          .get_default_face_mesh_iris_connections_style())
+
+  return annotated_image

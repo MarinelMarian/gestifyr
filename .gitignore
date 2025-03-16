@@ -10,5 +10,5 @@ app/detections
 app/skipped
 app/samples/*.mp4
 
-tudor/movies
+tudor/
 tudor/__pycache__/
