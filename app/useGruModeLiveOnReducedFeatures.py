@@ -24,7 +24,7 @@ queue_frame_size_sec = (
     1  # window length in seconds. This window will be the input to prediction
 )
 analyse_video_step_sec = (
-    0.5  # in seconds, how much time should pass until next window is analyzed
+    0.3  # in seconds, how much time should pass until next window is analyzed
 )
 trigger_release_time = 2  # in seconds, how much time should pass until next trigger
 not_threshold = 0.8  # threshold for not gesture
@@ -131,7 +131,7 @@ while True:
         cv2.putText(frame, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
 
     else:
-        img_w, img_h, _ = frame.shape
+        img_h, img_w, _ = frame.shape
 
         result_features = extract_features_v2(frame)
         frame = draw_landmarks_on_image(frame,result_features) if mask_on else frame
@@ -148,7 +148,12 @@ while True:
 
         x, y = get_angles(raw_features, img_w, img_h)
         features_reduced = ([y / 90, x / 90, *reduced_features_row])
-
+        if mask_on:
+            nose_2d = raw_features[3:6]
+            p1 = (int(nose_2d[0]*img_w), int(nose_2d[1]*img_h))
+            p2 = (int(nose_2d[0]*img_w + x * 20) , int(nose_2d[1]*img_h - y * 20))
+            cv2.line(frame, p1, p2, (0, 0, 255), 3)
+            frame = cv2.circle(frame, p1, 10, (0, 0, 255), -1)
         frame_queue.append(features_reduced)
         frame = overlayRoundedSquare(frame, (50, 50), (120, 100), "Mask ON", "Mask OFF", mask_on)
         frame = overlayRoundedSquare(frame, (50, 170), (120, 100), "Sound ON", "Sound OFF", sound_on)
