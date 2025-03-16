@@ -6,6 +6,7 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 import cv2
 from collections import deque
+from audio_tools import check_trigger_and_play_sound
 from mediapipe_extract import draw_landmarks_on_image, extract_features_v2
 from tools import clear_terminal
 import json
@@ -25,6 +26,13 @@ queue_frame_size_sec = (
 analyse_video_step_sec = (
     0.5  # in seconds, how much time should pass until next window is analyzed
 )
+trigger_release_time = 2  # in seconds, how much time should pass until next trigger
+not_threshold = 0.5  # threshold for not gesture
+shake_threshold = 0.5  # threshold for shake gesture
+mouth_threshold = 0.5  # threshold for open mouth gesture
+eyebrows_threshold = 0.5  # threshold for raise eyebrows gesture
+blink_threshold = 0.5  # threshold for blink gesture
+smile_threshold = 0.5  # threshold for smile gesture
 # ------------------------
 
 
@@ -104,6 +112,9 @@ idx = 0
 mask_on = False
 sound_on = False
 probValues = [0,0,0,0,0,0,0]
+sound_triggered = False
+trigger_release_counter = int(fps * trigger_release_time)
+probabilities_thresholds = [not_threshold, shake_threshold, mouth_threshold, eyebrows_threshold, blink_threshold, smile_threshold]
 
 while True:
     ret, frame = cap.read()
@@ -169,12 +180,12 @@ while True:
                     f"Predicted Gesture: {predicted_label}, Confidence: {confidence.item():.4f}"
                 )
                 probValues = probabilities.tolist()[0]
-        frame = overlayBar( frame, position_idx = 1, value = probValues[0], icon_image = icons.icon_nod , threshold = 0.53)
-        frame = overlayBar( frame, position_idx = 2, value = probValues[1], icon_image = icons.icon_shake , threshold = 0.5)
-        frame = overlayBar( frame, position_idx = 3, value = probValues[2], icon_image = icons.icon_open_mouth , threshold = 0.5)
-        frame = overlayBar( frame, position_idx = 4, value = probValues[3], icon_image = icons.icon_raise_eyebrows , threshold = 0.5)
-        frame = overlayBar( frame, position_idx = 5, value = probValues[4], icon_image = icons.icon_eyes_shut , threshold = 0.5)  
-        frame = overlayBar( frame, position_idx = 6, value = probValues[5], icon_image = icons.icon_smile , threshold = 0.5)
+        frame = overlayBar( frame, position_idx = 1, value = probValues[0], icon_image = icons.icon_nod , threshold = not_threshold)
+        frame = overlayBar( frame, position_idx = 2, value = probValues[1], icon_image = icons.icon_shake , threshold = shake_threshold)
+        frame = overlayBar( frame, position_idx = 3, value = probValues[2], icon_image = icons.icon_open_mouth , threshold = mouth_threshold)
+        frame = overlayBar( frame, position_idx = 4, value = probValues[3], icon_image = icons.icon_raise_eyebrows , threshold = eyebrows_threshold)
+        frame = overlayBar( frame, position_idx = 5, value = probValues[4], icon_image = icons.icon_eyes_shut , threshold = blink_threshold)  
+        frame = overlayBar( frame, position_idx = 6, value = probValues[5], icon_image = icons.icon_smile , threshold = smile_threshold)
     cv2.imshow("Capturing Frames", frame)
     key = cv2.waitKey(1) & 0xFF
     if key == ord('q'):
@@ -183,11 +194,20 @@ while True:
         mask_on = not mask_on  # Toggle mask_on flag
     elif key == ord('s'):
         sound_on = not sound_on
+        trigger_release_counter = int(fps * trigger_release_time)
+        sound_triggered = False
     elif key in [ord('0'), ord('1'), ord('2'), ord('3'), ord('4'), ord('5'), ord('6')]:
         camera_device_id = int(chr(key))
         cap.release()  # Release the current capture
         (cap, fps, queue_frame_size, analyse_video_step, frame_queue) = initialize_webcam(camera_device_id)  # Switch to the new camera
-
+    if sound_on:
+        if not sound_triggered:
+            sound_triggered = check_trigger_and_play_sound(probValues[0:6], probabilities_thresholds)
+        else:
+            trigger_release_counter -= 1
+            if trigger_release_counter <= 0:
+                sound_triggered = False
+                trigger_release_counter = int(fps * trigger_release_time)
 
 cap.release()
 cv2.destroyAllWindows()

@@ -8,3 +8,4 @@ dotenv>=0.9.9
 PySide6>=6.8.2.1
 gTTS>=2.5.4
 pygame>=2.6.1
+soundfile
