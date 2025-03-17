@@ -45,7 +45,7 @@ clear_terminal()
 
 # Model parameters
 metadata_filename = (
-    f"{BASE_PATH}{APP_REL_PATH}model/gru_64_3_0.01_5/info_model.txt"
+    f"{BASE_PATH}{APP_REL_PATH}model/gru_128_3_0.005_5/info_model.txt"
 )
 with open(metadata_filename, "r") as file:
     data = json.load(file)
