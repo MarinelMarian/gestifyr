@@ -21,7 +21,7 @@ APP_REL_PATH = os.getenv("APP_REL_PATH")
 
 # ----- user params --------
 queue_frame_size_sec = (
-    0.8  # window length in seconds. This window will be the input to prediction
+    1  # window length in seconds. This window will be the input to prediction
 )
 analyse_video_step_sec = (
     0.3  # in seconds, how much time should pass until next window is analyzed
@@ -45,7 +45,7 @@ clear_terminal()
 
 # Model parameters
 metadata_filename = (
-    f"{BASE_PATH}{APP_REL_PATH}model/gru_128_3_0.002_5/info_model.txt"
+    f"{BASE_PATH}{APP_REL_PATH}model/gru_128_4_0.001_5/info_model.txt"
 )
 with open(metadata_filename, "r") as file:
     data = json.load(file)

@@ -1,8 +1,8 @@
 {
-    "model_file": "app/model//gru_256_3_0.005_5/gru_model.pth",
-    "scaler_file": "app/model//gru_256_3_0.005_5/scaler.pkl",
+    "model_file": "app/model//gru_256_5_0.01_5/gru_model.pth",
+    "scaler_file": "app/model//gru_256_5_0.01_5/scaler.pkl",
     "hidden_size": 256,
-    "num_layers": 3,
+    "num_layers": 5,
     "labels": [
         "0",
         "1",
