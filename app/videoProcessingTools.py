@@ -181,3 +181,41 @@ def overlayBar( frame, **kwargs):
     fill_color = (0, 255, 0) if value>=thresh else (33, 222, 255)
     cv2.rectangle(frame, (bar_x, bar_y), (bar_x + fill_width, bar_y + bar_height), fill_color, -1)
     return frame
+
+def overlayRoundedSquare(frame, position, size, textTrue, textFalse = '', isActive = True):
+    """
+    Overlay a square with rounded corners on the frame.
+
+    Parameters:
+    - frame: The image frame.
+    - position: Tuple (x, y) for the top-left corner of the square.
+    - size: Size of the square (width, height).
+    - background_color: Background color of the square (B, G, R).
+    
+    """
+    x, y = position
+    width, height = size
+    radius = int(min(width, height) / 5)
+    background_color = (0,255,0) if isActive else (0, 0, 255)
+    text_color = (255, 255, 255)
+    text = textTrue if isActive else textFalse
+    # Create a mask for the rounded rectangle
+    mask = np.zeros((height, width, 3), dtype=np.uint8)
+    mask = cv2.rectangle(mask, (radius, 0), (width - radius, height), background_color, -1)
+    mask = cv2.rectangle(mask, (0, radius), (width, height - radius), background_color, -1)
+    mask = cv2.circle(mask, (radius, radius), radius, background_color, -1)
+    mask = cv2.circle(mask, (width - radius, radius), radius, background_color, -1)
+    mask = cv2.circle(mask, (radius, height - radius), radius, background_color, -1)
+    mask = cv2.circle(mask, (width - radius, height - radius), radius, background_color, -1)
+
+    # Overlay the mask on the frame
+    roi = frame[y:y+height, x:x+width]
+    frame[y:y+height, x:x+width] = cv2.addWeighted(roi, 1, mask, 1, 0)
+
+    # Put the text in the center of the square
+    text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+    text_x = x + (width - text_size[0]) // 2
+    text_y = y + (height + text_size[1]) // 2
+    cv2.putText(frame, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, text_color, 2)
+
+    return frame

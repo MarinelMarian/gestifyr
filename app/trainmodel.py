@@ -25,10 +25,10 @@ learning_rate = 0.001
 
 # ---------------------
 model_inputs = {
-    "file_path": [f"{BASE_PATH}{APP_REL_PATH}samples3/processed_trimmed"],  # list of folders
-    "hidden_size": [64],
-    "num_layers": [3],
-    "epoch_thresh": [0.1],
+    "file_path": [f"{BASE_PATH}{APP_REL_PATH}samples/"],  # list of folders
+    "hidden_size": [64,128,256],
+    "num_layers": [2,3,4,5],
+    "epoch_thresh": [0.1,0.01,0.001],
     "batch_size": [5],
 }
 
