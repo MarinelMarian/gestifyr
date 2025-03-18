@@ -26,7 +26,7 @@ queue_frame_size_sec = (
 analyse_video_step_sec = (
     0.3  # in seconds, how much time should pass until next window is analyzed
 )
-trigger_release_time = 2  # in seconds, how much time should pass until next trigger
+trigger_release_time = 1.5  # in seconds, how much time should pass until next trigger
 not_threshold = 0.8  # threshold for not gesture
 shake_threshold = 0.8  # threshold for shake gesture
 mouth_threshold = 0.8  # threshold for open mouth gesture

@@ -129,9 +129,9 @@ def overlayBar( frame, **kwargs):
     icon_image = kwargs['icon_image']
     thresh = kwargs['threshold']
     # Resize the icon if needed
-    icon_size = 80  # Adjust this for desired size
+    icon_size = 60  # Adjust this for desired size
     bar_width = 300
-    bar_height = 80
+    bar_height = 60
     icon_image = cv2.resize(icon_image, (icon_size, icon_size))
     # Get frame dimensions
     height, width, _ = frame.shape
@@ -139,7 +139,7 @@ def overlayBar( frame, **kwargs):
     # Define positions
     
     bar_x = width - bar_width - 60  # Move left to fit icon
-    bar_y = 100 + (bar_height +30) * position_idx 
+    bar_y = 10 + (bar_height +30) * position_idx 
 
     # Icon position
     icon_x = bar_x - icon_size - 10  # Shift left of progress bar
