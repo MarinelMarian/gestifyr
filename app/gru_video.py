@@ -28,10 +28,10 @@ VIDEO_ENCODER_FOURCC = (
 
 # ----- user params --------
 queue_frame_size_sec = (
-    1  # window length in seconds. This window will be the input to prediction
+    0.6  # window length in seconds. This window will be the input to prediction
 )
 analyse_video_step_sec = (
-    0.3  # in seconds, how much time should pass until next window is analyzed
+    0.2  # in seconds, how much time should pass until next window is analyzed
 )
 output_file_base_name = "output_model"
 trigger_release_time = 2  # in seconds, how much time should pass until next trigger
@@ -42,6 +42,27 @@ eyebrows_threshold = 0.8  # threshold for raise eyebrows gesture
 blink_threshold = 0.8  # threshold for blink gesture
 smile_threshold = 0.8  # threshold for smile gesture
 # ------------------------
+
+def stitch_frames(frame1, frame2):
+    """ Resize two frames to 50% and stitch them side by side. """
+    # Resize frames to 50%
+    frame_height, frame_width, _ = frame1.shape
+    new_w, new_h = frame_width // 2, frame_height // 2
+    frame1_resized = cv2.resize(frame1, (new_w, new_h))
+    frame2_resized = cv2.resize(frame2, (new_w, new_h))
+
+    # Create black frame (original size)
+    stitched_frame = np.zeros((frame_height, frame_width, 3), dtype=np.uint8)
+
+    # Calculate positions to center them
+    x_offset = (frame_width - (new_w * 2)) // 2
+    y_offset = (frame_height - new_h) // 2
+
+    # Place the resized frames side by side
+    stitched_frame[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = frame1_resized
+    stitched_frame[y_offset:y_offset+new_h, x_offset+new_w:x_offset+(2*new_w)] = frame2_resized
+
+    return stitched_frame
 
 file_path = filedialog.askopenfilename(title="Select a file",
                                        filetypes=[("All Files", "*.*")])
@@ -57,7 +78,7 @@ clear_terminal()
 
 # Model parameters
 metadata_filename = (
-    f"{BASE_PATH}{APP_REL_PATH}model/gru_64_4_0.2_10/info_model.txt"
+    f"{BASE_PATH}{APP_REL_PATH}model/gru_128_4_0.0001_5/info_model.txt"
 )
 with open(metadata_filename, "r") as file:
     data = json.load(file)
@@ -138,7 +159,7 @@ while True:
         break
     else:
         img_h, img_w, _ = frame.shape
-
+        original_frame = frame.copy()
         result_features = extract_features_v2(frame)
         frame = draw_landmarks_on_image(frame,result_features) if mask_on else frame
 
@@ -198,8 +219,10 @@ while True:
         frame = overlayBar( frame, position_idx = 6, value = probValues[5], icon_image = icons.icon_smile , threshold = smile_threshold)
     cv2.imshow("Capturing Frames", frame)
     if video_writer is not None:
+        frame_to_write = stitch_frames(original_frame, frame)
+
         with open(os.devnull, "w") as devnull, redirect_stderr(devnull), redirect_stdout(devnull):
-            video_writer.write(frame)
+            video_writer.write(frame_to_write)
     key = cv2.waitKey(1) & 0xFF
     if key == ord('q'):
         break

@@ -15,20 +15,21 @@ import os
 import datetime as dt
 from dotenv import load_dotenv
 
+
 load_dotenv()
 BASE_PATH = os.getenv("BASE_PATH")
 APP_REL_PATH = os.getenv("APP_REL_PATH")
 
 # --------- Init Params -------
-epochs = 1000
+epochs = 400
 learning_rate = 0.001
 
 # ---------------------
 model_inputs = {
-    "file_path": [f"{BASE_PATH}{APP_REL_PATH}samples/"],  # list of folders
-    "hidden_size": [64,128,256],
-    "num_layers": [2,3,4,5],
-    "epoch_thresh": [0.1,0.01,0.001],
+    "file_path": [f"{BASE_PATH}./app/samples/"],  # list of folders
+    "hidden_size": [64, 128],
+    "num_layers": [3,4],
+    "epoch_thresh": [0.001],
     "batch_size": [5],
 }
 
@@ -85,7 +86,7 @@ def collate_fn(batch):
 def calculate_model(**kwargs):
     print("\n\n\n-------------------")
     print(f"Starting new model calculation with params :{kwargs}")
-    output_folder = kwargs["file_path"].split("/")[-1]
+    output_folder = 'for_final_final'
 
     model_name = (
         f'gru_{kwargs["hidden_size"]}_{kwargs["num_layers"]}_{kwargs["epoch_thresh"]}_{kwargs["batch_size"]}'
@@ -107,7 +108,7 @@ def calculate_model(**kwargs):
         f"{BASE_PATH}{APP_REL_PATH}model/{output_folder}/{model_name}/info_model.txt"
     )
     train_files = glob.glob(f'{kwargs["file_path"]}/*.csv')
-    labels = sorted(set(os.path.basename(f).split("_")[1] for f in train_files))
+    labels = sorted(set(os.path.basename(f)[8] for f in train_files))
     print(f"Labels found: {labels}")
     label_encoder = LabelEncoder()
     label_encoder.fit(labels)

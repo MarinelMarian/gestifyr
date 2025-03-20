@@ -1,0 +1,17 @@
+{
+    "model_file": "app/model/for_final_final/gru_128_4_0.001_5/gru_model.pth",
+    "scaler_file": "app/model/for_final_final/gru_128_4_0.001_5/scaler.pkl",
+    "hidden_size": 128,
+    "num_layers": 4,
+    "labels": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+    ],
+    "input_size": 9,
+    "output_size": 7
+}
