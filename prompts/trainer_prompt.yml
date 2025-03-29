@@ -1,0 +1,55 @@
+Design a training application in python for gesture classification that does the following:
+
+Configuration and Initialization:
+
+Load configuration settings from the environment.
+Set base paths and hyperparameters (such as learning rate, number of epochs, hidden layer sizes, number of GRU layers, acceptable loss threshold, and batch size) using environment variables and default values.
+Define a collection of hyperparameter combinations to explore (e.g., different hidden sizes, layers, and convergence thresholds).
+Data Loading and Preprocessing:
+
+Search for CSV files in a specified samples folder.
+For each CSV file:
+Read the data while skipping the header row.
+Extract the numerical features from the CSV and normalize them.
+Derive the corresponding gesture label from each file's name.
+Use an encoder to convert labels into numerical form and a scaler to normalize the input features.
+Construct a custom dataset that holds each sample as a sequence of features along with its corresponding label.
+Define a function to merge variable-length sequences into a batch by padding them appropriately.
+Model Definition:
+
+Define a recurrent neural network model based on a Gated Recurrent Units (GRU) architecture.
+The model should accept sequences of normalized features as inputs.
+Use the last output of the GRU sequence as input to a fully connected layer that outputs classification scores over the set of gesture classes.
+Ensure the input size of the model is determined by the dimension of the features from the CSV files, and the output size corresponds to the number of unique gesture labels.
+Training Process:
+
+Iterate over all defined hyperparameter configurations (grid search over hidden sizes, number of layers, loss thresholds, and batch sizes).
+For each configuration:
+Initialize the dataset and data loader with the chosen batch size and collate function for padding.
+Create the GRU model with the specified hyperparameters.
+Define an appropriate loss criterion and an optimizer.
+Run the training loop for a maximum number of epochs:
+For each batch, compute predictions using the model.
+Calculate the loss signal using a suitable loss function.
+Perform backpropagation and update the model parameters.
+Track and log the average loss per epoch.
+Implement early stopping if the average loss drops below the specified threshold for the current configuration.
+Print out training progress and epoch loss details to the console.
+Saving the Model and Metadata:
+
+Once training completes under a given hyperparameter configuration, save the trained model’s state to the filesystem.
+Also save the scaler used for normalizing the features so that the same transformation can be applied during inference.
+Create a metadata file (in JSON or text format) that stores:
+The hyperparameters used (hidden size, number of layers, etc.).
+The model file path and the scaler file path.
+Information about the input feature dimensions and the number of output classes.
+Organize saved models and metadata into appropriately named directories that reflect the hyperparameter configuration.
+Overall Behavior:
+
+The script should automatically try all defined hyperparameter combinations against the training data from the CSV samples.
+It logs useful details to the console such as:
+Which gesture labels were found.
+The progress of each model training iteration (epoch number and loss).
+When early stopping is triggered.
+Paths to saved model and scaler files.
+The final output is a trained model (or multiple models) that can classify gestures based on the time-series feature inputs extracted from CSV files and saved in a structured directory.

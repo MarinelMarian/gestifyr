@@ -1,0 +1,72 @@
+Develop a live gesture prediction application in python with the following functionality:
+
+Initialization and Configuration:
+
+Load environment configurations (paths, user settings, etc.).
+Define key user parameters such as:
+The length of the sliding window (in seconds) used as input for the prediction.
+The time step interval for analyzing the video stream.
+A release time controlling how soon a new gesture trigger can occur.
+Several thresholds for different gesture types (e.g., "not", "shake", "open mouth", "raise eyebrows", "blink", "smile").
+Clear the terminal upon start to present a clean output.
+Model and Metadata Loading:
+
+Retrieve model metadata (including input size, hidden layer size, output size, and number of layers) from a saved configuration file.
+Load the pretrained recurrent model (GRU-based) using the metadata.
+Load the saved scaler used for normalizing input features.
+Define and print a list of gesture labels corresponding to the model's output.
+Report successful model loading along with relevant parameters.
+Webcam Initialization and Frame Extraction:
+
+Initialize the webcam (with configurable device ID) to capture high-resolution video.
+Set properties like frame width, height, and frames per second.
+Prepare a frame queue (sliding window) whose size is determined by the video stream FPS and the desired window duration.
+Allow switching camera devices via key presses.
+Live Processing Loop:
+
+Acquire frames continuously from the webcam.
+If no frame is captured, display an error overlay informing the user to select another camera.
+For each valid frame:
+Compute image dimensions and optionally apply a mirror effect.
+Use a face extraction module based on MediaPipe to extract facial landmarks and blendshape features.
+If the user enables "mask" mode, render the landmarks on the frame using a drawing routine.
+From the extraction result, process features to build a reduced feature vector:
+Flatten raw three-dimensional landmark coordinates.
+Extract specific blendshape scores according to a predefined list of point indices.
+Compute head rotation angles using a helper mechanism (get_angles) based on a subset of landmark points.
+Create an input feature vector composed of normalized angles and blendshape scores.
+Append the reduced feature vector to the sliding window queue.
+Gesture Prediction:
+
+Every predefined number of frames (determined by the analysis time step), convert the contents of the frame queue into a normalized tensor.
+Pass the tensor through the loaded GRU model to obtain prediction scores.
+Transform the model outputs into probabilities (using a softmax operation) and select the predicted gesture label.
+Display the predicted gesture and its confidence on the console.
+Store and update the probability values for each gesture type for further visualization.
+Graphical Overlays:
+
+Use overlay functions to draw dynamic graphics on the live frame:
+Progress Bars: For each gesture type, draw an overlay bar using a helper function (overlayBar). Each bar should:
+Be positioned appropriately on the frame.
+Display an icon representing the gesture (icons and their paths are predefined).
+Have a colored progress fill that changes based on the prediction probability relative to a threshold.
+Optionally show a marker (such as a triangle) indicating the threshold value.
+Toggle Buttons: Render rounded square overlays (using overlayRoundedSquare) to indicate the state of features like "Mask ON/OFF" and "Sound ON/OFF". These buttons should display different texts based on the active state.
+Camera Label: Display the current camera number in a predefined area.
+Ensure that all graphical elements are blended over the live video with proper transparency and scaling.
+Audio Feedback:
+
+When sound is enabled, use the audio helper function (check_trigger_and_play_sound) to monitor the probability values.
+If a probability exceeds its corresponding threshold, play an associated sound clip (via asynchronous playback) and manage a release counter to avoid repeated triggers until a defined time has elapsed.
+User Interaction and Keybindings:
+
+Map key presses for:
+Quitting the application.
+Toggling mask mode (to enable landmark overlay).
+Toggling sound mode.
+Switching between available camera devices.
+Allow the live loop to update overlays and prediction cycles based on these key events.
+Termination:
+
+Ensure that on exit, the webcam resource is released and all display windows are closed.
+Optionally, log a final message indicating end of session.
