@@ -1,0 +1,55 @@
+### Prompt for Data Collector
+Design a python application that captures and processes video recordings based on user gestures. The application should do the following:
+
+Webcam Initialization & Recording:
+
+Start by accessing the default webcam and setting it to a high-resolution mode.
+Continuously capture video frames in real time.
+Apply a mirror effect (horizontal flip) to the captured frames.
+Immediately after retrieving each frame, resize it to a fixed display width (e.g., 640px) maintaining the aspect ratio.
+Use the resized frame dimensions for all subsequent overlays and graphics.
+Gesture Recording & Processing:
+
+The application cycles through a predefined set of gestures (loaded from a JSON file).
+When a specific gesture is active, automatically start recording the video when entering the "display" phase.
+As the gesture is being performed, write the captured frame to a temporary video file.
+Continue recording until the gesture display duration has elapsed; then release the recording, rename the temporary file (using timestamps and gesture indexes) and print a confirmation message.
+When not in recording mode (waiting between gestures), update the gesture index cyclically.
+Feature Extraction and Angles Calculation:
+
+For each frame, extract facial landmarks and blend shape features using the MediaPipe library.
+Use a helper function, get_angles (from a separate module), to compute angles from selected facial landmark points. This function takes the flattened facial landmark data and the current image dimensions, and returns rotational angles (used for further processing or overlay).
+Display relevant detected features on the frame in real time (e.g., by drawing points or lines).
+CSV Generation:
+
+After processing a recorded gesture, generate a CSV file containing the extracted features for that gesture.
+Leverage a helper function, write_to_csv (from the tools module), which ensures that the target directory exists and then writes the data rows into the CSV file with a proper header.
+Print a confirmation message once a CSV file has been saved.
+Overlays and Graphics:
+
+Render various overlays on the video feed including:
+A progress bar indicating the progress of the current gesture recording (based on time elapsed versus the display duration).
+Text overlays such as the current gesture name (centered on the frame) and a help prompt (e.g., "Press 'h' for help").
+An overlay area at the bottom of the frame to show a play/pause button and any relevant symbols.
+All overlay elements must be computed and placed using the resized frame dimensions.
+Interactive Modes and Modal Windows:
+
+Allow toggling between recording mode and review mode through specific key presses.
+In review mode, present recorded gesture videos in a timeline and generate plots based on the extracted features.
+Provide modal progress windows during long-running operations (e.g., generating CSVs, saving detections, cleanup operations) to block additional user interactions. Display current operation details (like “Generating recording CSVs”), a numerical indicator (x/y), and a progress bar that updates in real time.
+Include a help window that displays detailed instructions for available key commands.
+User Interaction and Key Bindings:
+
+Map keys to specific application actions:
+Toggle recording with a specific key.
+Display help with 'h'.
+Switch to review mode with 'r'.
+Exit the application with 'q' or the Escape key.
+Offer additional keys for operations like saving detections or performing cleanup.
+Ensure that every key press triggers the corresponding behavior (e.g., starting/stopping recordings, opening modal windows, or updating overlays).
+General Application Flow:
+
+Continuously capture frames in a loop until the user explicitly exits.
+For each frame, after processing and drawing overlays, display the updated frame in a window.
+Use computed values (like frame dimensions, gesture durations, and progress bar lengths) that update immediately after the frame resize so that all components (graphics, text, overlays) are rendered proportionally.
+Log or print status messages to the console for operations such as saving recordings, writing CSVs, or completing cleanup actions.
