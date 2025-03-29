@@ -28,7 +28,6 @@ from videoProcessingTools import points_to_extract
 
 
 from videoProcessingTools import get_angles
-from mediapipe_extract import extract_features_v2
 from tools import write_to_csv
 from dotenv import load_dotenv
 
@@ -54,6 +53,18 @@ try:
     cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
 except AttributeError:
     pass
+
+# def list_webcams(max_tested=10):
+#     available = []
+#     for i in range(max_tested):
+#         cap = cv2.VideoCapture(i)
+#         if cap.isOpened():
+#             available.append(i)
+#             cap.release()
+#     return available
+
+# cams = list_webcams(10)
+# print("Available webcams:", cams)
 
 # Load gestures from file (replace the GESTURES list).
 with open("gestures.json", "r") as f:
